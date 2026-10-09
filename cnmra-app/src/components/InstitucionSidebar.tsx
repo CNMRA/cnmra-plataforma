@@ -1,0 +1,81 @@
+"use client";
+
+import Image from "next/image";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+
+const links = [
+  { href: "/institucion", label: "Panel" },
+  { href: "/institucion/cursos", label: "Cursos" },
+  { href: "/institucion/inscripcion", label: "Inscripción" },
+  { href: "/institucion/seguimiento", label: "Seguimiento" },
+  { href: "/institucion/calificaciones", label: "Calificaciones" },
+  { href: "/institucion/alertas", label: "Alertas" },
+  { href: "/institucion/usuarios", label: "Usuarios" },
+];
+
+export default function InstitucionSidebar({
+  nombre,
+  rol,
+}: {
+  nombre: string;
+  rol: string;
+}) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const supabase = createClient();
+
+  async function salir() {
+    await supabase.auth.signOut();
+    router.push("/login");
+  }
+
+  const iniciales = nombre
+    .split(" ")
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  return (
+    <div className="flex-none w-[220px] bg-navy-dark p-4 flex flex-col gap-7 text-white">
+      <div className="flex items-center gap-2.5 px-1">
+        <Image src="/logo.jpg" alt="CNMRA" width={32} height={32} className="rounded object-contain" />
+        <span className="font-display font-bold text-sm">CNMRA</span>
+      </div>
+
+      <nav className="flex flex-col gap-0.5">
+        {links.map((l) => {
+          const active = l.href === "/institucion" ? pathname === l.href : pathname.startsWith(l.href);
+          return (
+            <Link
+              key={l.href}
+              href={l.href}
+              className={`rounded-lg px-3.5 py-2.5 text-[13.5px] font-medium ${
+                active ? "bg-white/10 text-white" : "text-white/70 hover:text-white"
+              }`}
+            >
+              {l.label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="mt-auto flex items-center gap-2.5 border-t border-white/10 pt-3 px-1">
+        <div className="w-8 h-8 rounded-full bg-teal flex items-center justify-center text-[12px] font-semibold">
+          {iniciales}
+        </div>
+        <div className="leading-tight flex-1 min-w-0">
+          <div className="text-[12.5px] font-medium truncate">{nombre}</div>
+          <div className="text-[11px] text-white/60">
+            {rol === "director" ? "Dirección · acceso total" : "Carga de datos"}
+          </div>
+        </div>
+        <button onClick={salir} title="Cerrar sesión" className="text-white/50 hover:text-white text-[11px]">
+          Salir
+        </button>
+      </div>
+    </div>
+  );
+}
