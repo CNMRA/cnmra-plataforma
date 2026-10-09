@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import InstallButton from "@/components/InstallButton";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -89,7 +90,10 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-8 md:p-10">
+      <div className="flex-1 flex items-center justify-center p-8 md:p-10 relative">
+        <div className="absolute top-4 right-4 md:top-6 md:right-6">
+          <InstallButton />
+        </div>
         <form onSubmit={ingresar} className="w-full max-w-sm flex flex-col gap-5">
           <div className="flex flex-col items-center text-center gap-3">
             <div className="w-24 h-24 rounded-full bg-white border border-border shadow-md flex items-center justify-center">
