@@ -87,7 +87,7 @@ export default function AcuerdoFamilia() {
       ) : (
         <div className="flex flex-col gap-4">
           {filas.map((f) => (
-            <div key={f.acuerdoId} className="bg-card border border-border rounded-xl p-5 flex items-center justify-between gap-4">
+            <div key={f.acuerdoId} className="bg-card border border-border rounded-xl p-5 flex flex-wrap items-center justify-between gap-4">
               <div>
                 <div className="font-semibold">{f.nombre}</div>
                 <div className="text-xs text-text-soft mt-1">
