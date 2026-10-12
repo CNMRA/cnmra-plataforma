@@ -1,18 +1,45 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
+import {
+  type Instancia,
+  type NotasPorInstancia,
+  ETIQUETA_INSTANCIA,
+  evaluarMateria,
+} from "@/lib/calificaciones";
 
-type Estudiante = { id: string; nombre_completo: string };
+type Estudiante = {
+  id: string;
+  nombre_completo: string;
+  secciones: { cursos: { grado: string } | null } | null;
+};
+type Registro = {
+  id: string;
+  fecha: string;
+  categoria: string;
+  descripcion: string;
+  disciplina_id: string | null;
+  disciplinas: { nombre: string } | null;
+};
+type Asistencia = { id: string; fecha: string; estado: string };
+type Calificacion = {
+  id: string;
+  instancia: Instancia;
+  nota: number | null;
+  disciplina_id: string | null;
+  disciplinas: { nombre: string } | null;
+};
 
 export default function SeguimientoFamilia() {
   const supabase = createClient();
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
   const [estudianteId, setEstudianteId] = useState("");
   const [tab, setTab] = useState<"anecdotico" | "asistencia" | "notas">("anecdotico");
-  const [registros, setRegistros] = useState<{ id: string; fecha: string; categoria: string; descripcion: string }[]>([]);
-  const [asistencias, setAsistencias] = useState<{ id: string; fecha: string; estado: string }[]>([]);
-  const [calificaciones, setCalificaciones] = useState<{ id: string; materia: string; etapa: number; nota: number | null }[]>([]);
+  const [registros, setRegistros] = useState<Registro[]>([]);
+  const [asistencias, setAsistencias] = useState<Asistencia[]>([]);
+  const [calificaciones, setCalificaciones] = useState<Calificacion[]>([]);
+  const [filtroDisciplina, setFiltroDisciplina] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -22,28 +49,68 @@ export default function SeguimientoFamilia() {
       if (!user) return;
       const { data: familia } = await supabase.from("familias").select("id").eq("tutor_perfil_id", user.id).maybeSingle();
       if (!familia) return;
-      const { data } = await supabase.from("estudiantes").select("id, nombre_completo").eq("familia_id", familia.id);
-      setEstudiantes(data ?? []);
+      const { data } = await supabase
+        .from("estudiantes")
+        .select("id, nombre_completo, secciones(cursos(grado))")
+        .eq("familia_id", familia.id);
+      setEstudiantes((data as unknown as Estudiante[]) ?? []);
       if (data && data.length > 0) setEstudianteId(data[0].id);
     })();
   }, [supabase]);
 
+  const gradoActual = useMemo(() => {
+    const est = estudiantes.find((e) => e.id === estudianteId);
+    return est?.secciones?.cursos?.grado ?? null;
+  }, [estudiantes, estudianteId]);
+
   const cargar = useCallback(async () => {
     if (!estudianteId) return;
     const [{ data: r }, { data: a }, { data: c }] = await Promise.all([
-      supabase.from("registros_anecdoticos").select("id, fecha, categoria, descripcion").eq("estudiante_id", estudianteId).eq("visible_familia", true).order("fecha", { ascending: false }),
+      supabase
+        .from("registros_anecdoticos")
+        .select("id, fecha, categoria, descripcion, disciplina_id, disciplinas(nombre)")
+        .eq("estudiante_id", estudianteId)
+        .eq("visible_familia", true)
+        .order("fecha", { ascending: false }),
       supabase.from("asistencias").select("id, fecha, estado").eq("estudiante_id", estudianteId).order("fecha", { ascending: false }),
-      supabase.from("calificaciones").select("id, materia, etapa, nota").eq("estudiante_id", estudianteId).order("etapa"),
+      supabase
+        .from("calificaciones")
+        .select("id, instancia, nota, disciplina_id, disciplinas(nombre)")
+        .eq("estudiante_id", estudianteId),
     ]);
-    setRegistros(r ?? []);
+    setRegistros((r as unknown as Registro[]) ?? []);
     setAsistencias(a ?? []);
-    setCalificaciones(c ?? []);
+    setCalificaciones((c as unknown as Calificacion[]) ?? []);
   }, [estudianteId, supabase]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos desde Supabase
     cargar();
+    setFiltroDisciplina("");
   }, [cargar]);
+
+  const disciplinasDisponibles = Array.from(
+    new Map(
+      registros
+        .filter((r) => r.disciplinas?.nombre)
+        .map((r) => [r.disciplina_id as string, r.disciplinas!.nombre])
+    ).entries()
+  );
+
+  const registrosFiltrados = filtroDisciplina
+    ? registros.filter((r) => r.disciplina_id === filtroDisciplina)
+    : registros;
+
+  const notasPorDisciplina = useMemo(() => {
+    const mapa = new Map<string, { nombre: string; notas: NotasPorInstancia }>();
+    calificaciones.forEach((c) => {
+      if (!c.disciplina_id || c.nota === null) return;
+      const actual = mapa.get(c.disciplina_id) ?? { nombre: c.disciplinas?.nombre ?? "—", notas: {} };
+      actual.notas[c.instancia] = c.nota;
+      mapa.set(c.disciplina_id, actual);
+    });
+    return mapa;
+  }, [calificaciones]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -76,17 +143,38 @@ export default function SeguimientoFamilia() {
       </div>
 
       <div className="bg-card border border-border rounded-xl p-5">
-        {tab === "anecdotico" &&
-          (registros.length === 0 ? (
-            <p className="text-sm text-text-soft">Sin registros todavía.</p>
-          ) : (
-            registros.map((r) => (
-              <div key={r.id} className="py-2 border-b border-border last:border-none text-sm">
-                <div className="text-xs text-text-soft">{r.fecha} · {r.categoria}</div>
-                <div>{r.descripcion}</div>
-              </div>
-            ))
-          ))}
+        {tab === "anecdotico" && (
+          <>
+            {disciplinasDisponibles.length > 0 && (
+              <label className="flex flex-col gap-1.5 text-[13px] font-medium max-w-xs mb-4">
+                Ver solo…
+                <select
+                  value={filtroDisciplina}
+                  onChange={(e) => setFiltroDisciplina(e.target.value)}
+                  className="h-10 rounded-lg border border-border px-3 text-sm bg-card"
+                >
+                  <option value="">Todas las disciplinas</option>
+                  {disciplinasDisponibles.map(([id, nombre]) => (
+                    <option key={id} value={id}>{nombre}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {registrosFiltrados.length === 0 ? (
+              <p className="text-sm text-text-soft">Sin registros todavía.</p>
+            ) : (
+              registrosFiltrados.map((r) => (
+                <div key={r.id} className="py-2 border-b border-border last:border-none text-sm">
+                  <div className="text-xs text-text-soft">
+                    {r.fecha} · {r.categoria}
+                    {r.disciplinas?.nombre ? ` · ${r.disciplinas.nombre}` : ""}
+                  </div>
+                  <div>{r.descripcion}</div>
+                </div>
+              ))
+            )}
+          </>
+        )}
 
         {tab === "asistencia" &&
           (asistencias.length === 0 ? (
@@ -101,15 +189,22 @@ export default function SeguimientoFamilia() {
           ))}
 
         {tab === "notas" &&
-          (calificaciones.length === 0 ? (
+          (notasPorDisciplina.size === 0 ? (
             <p className="text-sm text-text-soft">Sin calificaciones cargadas todavía.</p>
           ) : (
-            calificaciones.map((c) => (
-              <div key={c.id} className="flex justify-between py-2 border-b border-border last:border-none text-sm">
-                <span>{c.materia} — {c.etapa}ª etapa</span>
-                <span className="font-semibold">{c.nota ?? "—"}</span>
-              </div>
-            ))
+            Array.from(notasPorDisciplina.entries()).map(([id, { nombre, notas }]) => {
+              const r = evaluarMateria(notas, gradoActual);
+              return (
+                <div key={id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 border-b border-border last:border-none text-sm">
+                  <span>{nombre}</span>
+                  {r && (
+                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${r.aprobado ? "bg-[#E7F3EB] text-success" : "bg-[#FBEAE8] text-danger"}`}>
+                      {r.notaFinal} · {ETIQUETA_INSTANCIA[r.instanciaFinal]} {r.aprobado ? "· Aprobada" : "· No aprobada"}
+                    </span>
+                  )}
+                </div>
+              );
+            })
           ))}
       </div>
     </div>
