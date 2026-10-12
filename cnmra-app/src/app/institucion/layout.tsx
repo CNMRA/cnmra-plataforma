@@ -25,9 +25,9 @@ export default async function InstitucionLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-bg">
+    <div className="flex flex-col md:flex-row min-h-screen bg-bg">
       <InstitucionSidebar nombre={perfil.nombre_completo} rol={perfil.rol} />
-      <div className="flex-1 p-8 overflow-x-hidden">{children}</div>
+      <div className="flex-1 min-w-0 p-4 md:p-8 overflow-x-hidden">{children}</div>
     </div>
   );
 }
