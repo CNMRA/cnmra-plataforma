@@ -3,13 +3,16 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-type Curso = { id: string; grado: string; turno: string; ciclo: string; enfasis: string | null };
+type Seccion = { id: string; nombre: string };
+type Curso = { id: string; grado: string; turno: string; ciclo: string; enfasis: string | null; secciones: Seccion[] };
 type InscripcionFila = {
   id: string;
   estado: string;
   creado_en: string;
+  estudiante_id: string;
+  curso_solicitado_id: string | null;
   estudiantes: { nombre_completo: string } | null;
-  cursos: { grado: string; turno: string } | null;
+  cursos: { id: string; grado: string; turno: string } | null;
 };
 
 export default function InscripcionInstitucional() {
@@ -29,13 +32,21 @@ export default function InscripcionInstitucional() {
   const [fechaNacimiento, setFechaNacimiento] = useState("");
   const [cursoId, setCursoId] = useState("");
 
+  const [seccionSeleccionada, setSeccionSeleccionada] = useState<Record<string, string>>({});
+  const [nuevaSeccionNombre, setNuevaSeccionNombre] = useState<Record<string, string>>({});
+  const [mostrarNuevaSeccion, setMostrarNuevaSeccion] = useState<Record<string, boolean>>({});
+  const [procesando, setProcesando] = useState<string | null>(null);
+
   const cargar = useCallback(async () => {
-    const { data: cursosData } = await supabase.from("cursos").select("id, grado, turno, ciclo, enfasis").order("orden");
-    setCursos(cursosData ?? []);
+    const { data: cursosData } = await supabase
+      .from("cursos")
+      .select("id, grado, turno, ciclo, enfasis, secciones(id, nombre)")
+      .order("orden");
+    setCursos((cursosData as unknown as Curso[]) ?? []);
 
     const { data: inscripcionesData } = await supabase
       .from("inscripciones")
-      .select("id, estado, creado_en, estudiantes(nombre_completo), cursos(grado, turno)")
+      .select("id, estado, creado_en, estudiante_id, curso_solicitado_id, estudiantes(nombre_completo), cursos(id, grado, turno)")
       .order("creado_en", { ascending: false })
       .limit(15);
     setPendientes((inscripcionesData as unknown as InscripcionFila[]) ?? []);
@@ -122,6 +133,41 @@ export default function InscripcionInstitucional() {
     cargar();
   }
 
+  async function matricular(fila: InscripcionFila) {
+    const seccionId = seccionSeleccionada[fila.id];
+    if (!seccionId) return;
+    setProcesando(fila.id);
+    await supabase.from("estudiantes").update({ seccion_id: seccionId }).eq("id", fila.estudiante_id);
+    await supabase.from("inscripciones").update({ estado: "aprobada" }).eq("id", fila.id);
+    setProcesando(null);
+    cargar();
+  }
+
+  async function rechazar(inscripcionId: string) {
+    setProcesando(inscripcionId);
+    await supabase.from("inscripciones").update({ estado: "rechazada" }).eq("id", inscripcionId);
+    setProcesando(null);
+    cargar();
+  }
+
+  async function crearSeccion(fila: InscripcionFila, cursoDestinoId: string) {
+    const nombre = (nuevaSeccionNombre[fila.id] ?? "").trim();
+    if (!nombre) return;
+    setProcesando(fila.id);
+    const { data, error } = await supabase
+      .from("secciones")
+      .insert({ curso_id: cursoDestinoId, nombre })
+      .select("id, nombre")
+      .single();
+    if (!error && data) {
+      await cargar();
+      setSeccionSeleccionada((prev) => ({ ...prev, [fila.id]: data.id }));
+      setNuevaSeccionNombre((prev) => ({ ...prev, [fila.id]: "" }));
+      setMostrarNuevaSeccion((prev) => ({ ...prev, [fila.id]: false }));
+    }
+    setProcesando(null);
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -151,7 +197,7 @@ export default function InscripcionInstitucional() {
           <select
             value={cursoId}
             onChange={(e) => setCursoId(e.target.value)}
-            className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
+            className="h-11 w-full rounded-lg border border-border px-3 text-sm bg-card"
           >
             <option value="">Seleccionar curso…</option>
             {cursos.map((c) => (
@@ -174,26 +220,116 @@ export default function InscripcionInstitucional() {
       </form>
 
       <div className="bg-card border border-border rounded-xl p-5">
-        <h3 className="font-display text-lg mb-3">Últimas inscripciones</h3>
+        <h3 className="font-display text-lg mb-1">Últimas inscripciones</h3>
+        <p className="text-xs text-text-soft mb-3">
+          Las inscripciones pendientes necesitan que les asignes una sección para
+          quedar matriculadas y aparecer en Calificaciones y Seguimiento.
+        </p>
         <div className="flex flex-col">
-          {pendientes.map((p) => (
-            <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 border-b border-border last:border-none text-sm">
-              <span>
-                {p.estudiantes?.nombre_completo ?? "—"} — {p.cursos ? `${p.cursos.grado} (${p.cursos.turno})` : "sin curso"}
-              </span>
-              <span
-                className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                  p.estado === "aprobada"
-                    ? "bg-[#E7F3EB] text-success"
-                    : p.estado === "rechazada"
-                    ? "bg-[#FBEAE8] text-danger"
-                    : "bg-[#FBEFE6] text-warning"
-                }`}
-              >
-                {p.estado}
-              </span>
-            </div>
-          ))}
+          {pendientes.map((p) => {
+            const curso = p.cursos ? cursos.find((c) => c.id === p.cursos!.id) : undefined;
+            const ocupado = procesando === p.id;
+            return (
+              <div key={p.id} className="flex flex-col gap-2.5 py-3 border-b border-border last:border-none">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span>
+                    {p.estudiantes?.nombre_completo ?? "—"} — {p.cursos ? `${p.cursos.grado} (${p.cursos.turno})` : "sin curso"}
+                  </span>
+                  <span
+                    className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                      p.estado === "aprobada"
+                        ? "bg-[#E7F3EB] text-success"
+                        : p.estado === "rechazada"
+                        ? "bg-[#FBEAE8] text-danger"
+                        : "bg-[#FBEFE6] text-warning"
+                    }`}
+                  >
+                    {p.estado}
+                  </span>
+                </div>
+
+                {p.estado === "pendiente" && (
+                  <div className="bg-bg rounded-lg p-3 flex flex-col gap-2.5">
+                    {!curso ? (
+                      <p className="text-xs text-text-soft">
+                        No tiene un curso solicitado válido — pedile a la familia que
+                        vuelva a inscribirse eligiendo un curso.
+                      </p>
+                    ) : (
+                      <>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                          <label className="flex flex-col gap-1.5 text-[12.5px] font-medium flex-1">
+                            Sección
+                            <select
+                              value={seccionSeleccionada[p.id] ?? ""}
+                              onChange={(e) =>
+                                setSeccionSeleccionada((prev) => ({ ...prev, [p.id]: e.target.value }))
+                              }
+                              className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card"
+                            >
+                              <option value="">
+                                {curso.secciones.length === 0 ? "Sin secciones todavía…" : "Seleccionar sección…"}
+                              </option>
+                              {curso.secciones.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  Sección {s.nombre}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            disabled={ocupado || !seccionSeleccionada[p.id]}
+                            onClick={() => matricular(p)}
+                            className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-4 w-full sm:w-auto disabled:opacity-50"
+                          >
+                            Matricular
+                          </button>
+                          <button
+                            type="button"
+                            disabled={ocupado}
+                            onClick={() => rechazar(p.id)}
+                            className="h-10 rounded-lg border border-border text-danger font-semibold text-sm px-4 w-full sm:w-auto disabled:opacity-50"
+                          >
+                            Rechazar
+                          </button>
+                        </div>
+
+                        {mostrarNuevaSeccion[p.id] ? (
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <input
+                              value={nuevaSeccionNombre[p.id] ?? ""}
+                              onChange={(e) =>
+                                setNuevaSeccionNombre((prev) => ({ ...prev, [p.id]: e.target.value }))
+                              }
+                              placeholder="Nombre de la sección (ej. A)"
+                              className="h-9 w-full sm:flex-1 rounded-md border border-border px-2.5 text-sm bg-card"
+                            />
+                            <button
+                              type="button"
+                              disabled={ocupado}
+                              onClick={() => crearSeccion(p, curso.id)}
+                              className="h-9 rounded-md bg-navy text-white text-xs font-semibold px-3 disabled:opacity-50"
+                            >
+                              Crear sección
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setMostrarNuevaSeccion((prev) => ({ ...prev, [p.id]: true }))}
+                            className="text-xs text-teal font-medium text-left"
+                          >
+                            + Crear una sección nueva para este curso
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
           {pendientes.length === 0 && <p className="text-sm text-text-soft">Todavía no hay inscripciones cargadas.</p>}
         </div>
       </div>
@@ -222,7 +358,7 @@ function Campo({
         required={required}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-11 rounded-lg border border-border px-3 text-sm bg-card focus:outline-none focus:border-teal"
+        className="h-11 w-full rounded-lg border border-border px-3 text-sm bg-card focus:outline-none focus:border-teal"
       />
     </label>
   );
