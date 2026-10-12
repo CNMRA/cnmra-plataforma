@@ -91,20 +91,20 @@ export default function UsuariosInstitucional() {
         <form onSubmit={agregar} className="flex flex-col md:flex-row gap-3 md:items-end">
           <label className="flex flex-col gap-1.5 text-[13px] font-medium flex-1">
             User UID (de Supabase)
-            <input value={userId} onChange={(e) => setUserId(e.target.value)} required className="h-10 rounded-lg border border-border px-3 text-sm bg-card" />
+            <input value={userId} onChange={(e) => setUserId(e.target.value)} required className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card" />
           </label>
           <label className="flex flex-col gap-1.5 text-[13px] font-medium flex-1">
             Nombre completo
-            <input value={nombre} onChange={(e) => setNombre(e.target.value)} required className="h-10 rounded-lg border border-border px-3 text-sm bg-card" />
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} required className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card" />
           </label>
           <label className="flex flex-col gap-1.5 text-[13px] font-medium">
             Rol
-            <select value={rol} onChange={(e) => setRol(e.target.value)} className="h-10 rounded-lg border border-border px-3 text-sm bg-card">
+            <select value={rol} onChange={(e) => setRol(e.target.value)} className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card md:w-auto">
               <option value="carga_datos">Carga de datos</option>
               <option value="director">Director</option>
             </select>
           </label>
-          <button disabled={guardando} className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-5">
+          <button disabled={guardando} className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-5 w-full md:w-auto">
             {guardando ? "Guardando…" : "Agregar"}
           </button>
         </form>
