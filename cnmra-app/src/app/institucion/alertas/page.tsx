@@ -95,7 +95,7 @@ export default function AlertasInstitucional() {
           className="rounded-lg border border-border px-3 py-2 text-sm bg-card min-h-20"
           required
         />
-        <button disabled={guardando} className="h-11 rounded-lg bg-navy text-white font-semibold text-sm w-fit px-6">
+        <button disabled={guardando} className="h-11 rounded-lg bg-navy text-white font-semibold text-sm w-full sm:w-fit px-6">
           {guardando ? "Enviando…" : "Enviar alerta"}
         </button>
       </form>
@@ -104,9 +104,9 @@ export default function AlertasInstitucional() {
         <h3 className="font-display text-lg mb-3">Historial</h3>
         <div className="flex flex-col">
           {alertas.map((a) => (
-            <div key={a.id} className="flex items-center gap-3 py-2.5 border-b border-border last:border-none text-sm">
+            <div key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 border-b border-border last:border-none text-sm">
               <span className={`w-2 h-2 rounded-full flex-none ${a.severidad === "alta" ? "bg-danger" : a.severidad === "media" ? "bg-warning" : "bg-gold"}`} />
-              <div className="flex-1">
+              <div className="flex-1 min-w-[10rem]">
                 <div className="font-medium">{a.estudiantes?.nombre_completo ?? "—"}</div>
                 <div className="text-xs text-text-soft">{a.mensaje}</div>
               </div>
