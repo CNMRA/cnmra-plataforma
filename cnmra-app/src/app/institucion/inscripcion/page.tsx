@@ -177,7 +177,7 @@ export default function InscripcionInstitucional() {
         <h3 className="font-display text-lg mb-3">Últimas inscripciones</h3>
         <div className="flex flex-col">
           {pendientes.map((p) => (
-            <div key={p.id} className="flex items-center justify-between py-2.5 border-b border-border last:border-none text-sm">
+            <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 border-b border-border last:border-none text-sm">
               <span>
                 {p.estudiantes?.nombre_completo ?? "—"} — {p.cursos ? `${p.cursos.grado} (${p.cursos.turno})` : "sin curso"}
               </span>
