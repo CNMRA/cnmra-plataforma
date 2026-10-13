@@ -50,7 +50,7 @@ export default function CursosPage() {
       <div>
         <h1 className="font-display text-2xl">Cursos</h1>
         <p className="text-sm text-text-soft mt-1 max-w-xl">
-          Elegí un curso para cargar asistencia, registro anecdótico o calificaciones.
+          Elegí un curso para cargar asistencia, registro anecdótico o calificaciones. Tocá el ícono de impresora para bajar la lista del curso.
         </p>
       </div>
 
@@ -73,18 +73,29 @@ export default function CursosPage() {
                   <div className="text-[12.5px] font-semibold mb-2">{ciclo}</div>
                   <div className="flex flex-col gap-1.5">
                     {cursosCiclo.map((c) => (
-                      <Link
+                      <div
                         key={c.id}
-                        href={`/institucion/cursos/${c.id}`}
-                        className="bg-bg rounded-lg px-3 py-2.5 text-sm flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2 hover:bg-[#ECEAE1]"
+                        className="bg-bg rounded-lg px-3 py-2.5 text-sm flex items-center justify-between gap-2 hover:bg-[#ECEAE1]"
                       >
-                        <span className="font-medium">{c.grado}</span>
-                        <span className="text-text-soft text-xs">
-                          {c.secciones.length > 0
-                            ? `Secciones ${c.secciones.map((s) => s.nombre).sort().join(" · ")}`
-                            : "Sin secciones"}
-                        </span>
-                      </Link>
+                        <Link
+                          href={`/institucion/cursos/${c.id}`}
+                          className="flex-1 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2"
+                        >
+                          <span className="font-medium">{c.grado}</span>
+                          <span className="text-text-soft text-xs">
+                            {c.secciones.length > 0
+                              ? `Secciones ${c.secciones.map((s) => s.nombre).sort().join(" · ")}`
+                              : "Sin secciones"}
+                          </span>
+                        </Link>
+                        <Link
+                          href={`/institucion/cursos/${c.id}/imprimir-lista`}
+                          title="Imprimir lista del curso"
+                          className="flex-none w-8 h-8 flex items-center justify-center rounded-md border border-border text-text-soft hover:text-navy hover:border-navy bg-card"
+                        >
+                          🖨️
+                        </Link>
+                      </div>
                     ))}
                   </div>
                 </div>
