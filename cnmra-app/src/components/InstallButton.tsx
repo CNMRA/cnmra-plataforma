@@ -7,12 +7,67 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
+type Plataforma = "ios" | "android" | "desktop";
+
+const INSTRUCCIONES: Record<Plataforma, { titulo: string; pasos: React.ReactNode[] }> = {
+  ios: {
+    titulo: "Instalar en iPhone / iPad",
+    pasos: [
+      <>
+        Tocá el botón <strong>Compartir</strong> (el cuadradito con la flecha
+        hacia arriba) en Safari.
+      </>,
+      <>
+        Deslizá y elegí <strong>&quot;Agregar a pantalla de inicio&quot;</strong>.
+      </>,
+      <>
+        Tocá <strong>&quot;Agregar&quot;</strong> arriba a la derecha.
+      </>,
+    ],
+  },
+  android: {
+    titulo: "Instalar en Android",
+    pasos: [
+      <>
+        Tocá el menú de tres puntitos <strong>⋮</strong> arriba a la derecha
+        del navegador.
+      </>,
+      <>
+        Elegí <strong>&quot;Instalar app&quot;</strong> o{" "}
+        <strong>&quot;Agregar a pantalla de inicio&quot;</strong>.
+      </>,
+      <>Confirmá tocando &quot;Instalar&quot; o &quot;Agregar&quot;.</>,
+    ],
+  },
+  desktop: {
+    titulo: "Instalar en la computadora",
+    pasos: [
+      <>
+        Buscá el ícono de instalación (una pantalla con una flecha) en la
+        barra de direcciones, a la derecha.
+      </>,
+      <>Si no lo ves, abrí el menú del navegador (⋮ o ≡).</>,
+      <>
+        Elegí <strong>&quot;Instalar CNMRA&quot;</strong> o{" "}
+        <strong>&quot;Agregar a pantalla de inicio&quot;</strong>.
+      </>,
+    ],
+  },
+};
+
+function detectarPlataforma(): Plataforma {
+  const ua = window.navigator.userAgent.toLowerCase();
+  if (/iphone|ipad|ipod/.test(ua)) return "ios";
+  if (/android/.test(ua)) return "android";
+  return "desktop";
+}
+
 export default function InstallButton() {
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
-  const [isIos, setIsIos] = useState(false);
-  const [showIosHelp, setShowIosHelp] = useState(false);
+  const [plataforma, setPlataforma] = useState<Plataforma>("desktop");
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     // Ya instalada / abierta como app
@@ -20,11 +75,12 @@ export default function InstallButton() {
       window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as unknown as { standalone?: boolean }).standalone
     ) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- detectar si ya corre instalada al montar
       setInstalled(true);
     }
 
-    const ua = window.navigator.userAgent.toLowerCase();
-    setIsIos(/iphone|ipad|ipod/.test(ua));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- detectar plataforma al montar
+    setPlataforma(detectarPlataforma());
 
     function onBeforeInstallPrompt(e: Event) {
       e.preventDefault();
@@ -47,19 +103,21 @@ export default function InstallButton() {
   if (installed) return null;
 
   async function handleClick() {
+    // Si el navegador ofrece el instalador nativo (Chrome/Edge/Android en
+    // algunos casos), lo usamos directamente.
     if (deferredPrompt) {
       await deferredPrompt.prompt();
       await deferredPrompt.userChoice;
       setDeferredPrompt(null);
       return;
     }
-    if (isIos) {
-      setShowIosHelp(true);
-    }
+    // En cualquier otro caso (iPhone, Safari, Firefox, navegadores que no
+    // disparan el instalador automático, etc.) mostramos el paso a paso
+    // según la plataforma detectada, así el botón siempre sirve para algo.
+    setShowHelp(true);
   }
 
-  // No mostramos nada si no hay forma de instalar (ni prompt disponible ni iOS)
-  if (!deferredPrompt && !isIos) return null;
+  const info = INSTRUCCIONES[plataforma];
 
   return (
     <>
@@ -85,31 +143,24 @@ export default function InstallButton() {
         Instalar app
       </button>
 
-      {showIosHelp && (
+      {showHelp && (
         <div
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 p-4"
-          onClick={() => setShowIosHelp(false)}
+          onClick={() => setShowHelp(false)}
         >
           <div
             className="bg-card rounded-xl max-w-sm w-full p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="font-display text-lg mb-2">Instalar en iPhone</h3>
+            <h3 className="font-display text-lg mb-2">{info.titulo}</h3>
             <ol className="text-sm text-text-soft list-decimal list-inside space-y-1.5">
-              <li>
-                Tocá el botón <strong>Compartir</strong> (el cuadradito con la
-                flecha hacia arriba) en Safari.
-              </li>
-              <li>
-                Deslizá y elegí <strong>&quot;Agregar a pantalla de inicio&quot;</strong>.
-              </li>
-              <li>
-                Tocá <strong>&quot;Agregar&quot;</strong> arriba a la derecha.
-              </li>
+              {info.pasos.map((paso, i) => (
+                <li key={i}>{paso}</li>
+              ))}
             </ol>
             <button
               type="button"
-              onClick={() => setShowIosHelp(false)}
+              onClick={() => setShowHelp(false)}
               className="mt-4 w-full h-10 rounded-lg bg-navy text-white text-sm font-semibold"
             >
               Entendido
