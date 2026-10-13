@@ -60,7 +60,7 @@ export default function LoginPage() {
               <div>
                 <div className="font-display font-bold text-lg leading-tight">CNMRA</div>
                 <div className="text-[10px] tracking-wide text-white/70">
-                  COLEGIO NACIONAL MARIANO R. ALONSO
+                  COLEGIO NACIONAL MARIANO ROQUE ALONSO
                 </div>
               </div>
             </div>
@@ -85,8 +85,7 @@ export default function LoginPage() {
         </div>
 
         <div className="text-[11px] text-white/50 leading-relaxed">
-          Barrio Corumbá Cué · Mariano Roque Alonso, Paraguay · Código
-          institucional 27534 · MEC
+          Barrio Corumbá Cué · Mariano Roque Alonso, Paraguay
         </div>
       </div>
 
@@ -102,7 +101,7 @@ export default function LoginPage() {
             <div>
               <h2 className="font-display text-2xl">Iniciar sesión</h2>
               <p className="text-sm text-text-soft mt-1">
-                Con la cuenta que te dio la institución.
+                Accedé a tu cuenta.
               </p>
             </div>
           </div>
