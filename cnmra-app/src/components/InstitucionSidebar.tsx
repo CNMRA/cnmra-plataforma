@@ -8,11 +8,8 @@ import { createClient } from "@/lib/supabase/client";
 
 const links = [
   { href: "/institucion", label: "Panel" },
-  { href: "/institucion/cursos", label: "Cursos" },
   { href: "/institucion/inscripcion", label: "Inscripción" },
-  { href: "/institucion/seguimiento", label: "Seguimiento" },
-  { href: "/institucion/calificaciones", label: "Calificaciones" },
-  { href: "/institucion/alertas", label: "Alertas" },
+  { href: "/institucion/cursos", label: "Cursos" },
   { href: "/institucion/usuarios", label: "Usuarios" },
 ];
 
@@ -79,7 +76,6 @@ export default function InstitucionSidebar({
 
   return (
     <>
-      {/* Escritorio: columna fija a la izquierda */}
       <div className="hidden md:flex flex-none w-[220px] bg-navy-dark p-4 flex-col gap-7 text-white">
         <div className="flex items-center gap-2.5 px-1">
           <Image src="/logo.jpg" alt="CNMRA" width={32} height={32} className="rounded object-contain" />
@@ -89,7 +85,6 @@ export default function InstitucionSidebar({
         {perfilBox}
       </div>
 
-      {/* Celular: barra superior + menú desplegable */}
       <div className="md:hidden flex-none bg-navy-dark text-white">
         <div className="h-14 flex items-center justify-between px-4">
           <div className="flex items-center gap-2.5">
