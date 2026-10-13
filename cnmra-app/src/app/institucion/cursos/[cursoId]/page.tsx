@@ -1,0 +1,709 @@
+"use client";
+
+import { use, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import {
+  type Instancia,
+  type NotasPorInstancia,
+  ETIQUETA_INSTANCIA,
+  calcularOrdinaria,
+  evaluarMateria,
+  tieneRegularizacion,
+  aprueba,
+} from "@/lib/calificaciones";
+
+type Curso = { id: string; grado: string; turno: string; ciclo: string; enfasis: string | null };
+type Estudiante = { id: string; nombre_completo: string };
+type Disciplina = { id: string; nombre: string; orden: number };
+type Registro = {
+  id: string;
+  fecha: string;
+  categoria: string;
+  descripcion: string;
+  disciplina_id: string | null;
+  disciplinas: { nombre: string } | null;
+};
+type CalifRow = { id: string; disciplina_id: string; instancia: Instancia; nota: number | null };
+
+type Tab = "asistencia" | "anecdotico" | "calificaciones";
+
+const etiquetaTurno: Record<string, string> = {
+  mañana: "Turno mañana",
+  tarde: "Turno tarde",
+  noche: "Turno noche",
+};
+
+export default function CursoDetallePage({ params }: { params: Promise<{ cursoId: string }> }) {
+  const { cursoId } = use(params);
+  const supabase = createClient();
+
+  const [curso, setCurso] = useState<Curso | null>(null);
+  const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
+  const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [tab, setTab] = useState<Tab>("asistencia");
+
+  const cargarCurso = useCallback(async () => {
+    const { data: cursoData } = await supabase
+      .from("cursos")
+      .select("id, grado, turno, ciclo, enfasis")
+      .eq("id", cursoId)
+      .single();
+    setCurso(cursoData ?? null);
+
+    const { data: seccionesData } = await supabase.from("secciones").select("id").eq("curso_id", cursoId);
+    const seccionIds = (seccionesData ?? []).map((s) => s.id);
+
+    const { data: estudiantesData } = seccionIds.length
+      ? await supabase
+          .from("estudiantes")
+          .select("id, nombre_completo")
+          .in("seccion_id", seccionIds)
+          .eq("estado", "activo")
+          .order("nombre_completo")
+      : { data: [] };
+    setEstudiantes(estudiantesData ?? []);
+
+    const { data: disciplinasData } = await supabase
+      .from("disciplinas")
+      .select("id, nombre, orden")
+      .eq("curso_id", cursoId)
+      .order("orden");
+    setDisciplinas(disciplinasData ?? []);
+    setCargando(false);
+  }, [cursoId, supabase]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos desde Supabase
+    cargarCurso();
+  }, [cargarCurso]);
+
+  async function agregarMateria(nombre: string) {
+    const limpio = nombre.trim();
+    if (!limpio) return;
+    await supabase.from("disciplinas").insert({ curso_id: cursoId, nombre: limpio });
+    await cargarCurso();
+  }
+
+  if (cargando) return <p className="text-sm text-text-soft">Cargando…</p>;
+
+  if (!curso) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-5 text-sm text-text-soft">
+        No se encontró este curso.{" "}
+        <Link href="/institucion/cursos" className="text-teal font-medium">
+          Volver a Cursos
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <Link href="/institucion/cursos" className="text-xs text-teal font-medium">
+          ← Volver a Cursos
+        </Link>
+        <h1 className="font-display text-2xl mt-1">
+          {curso.grado}
+          {curso.enfasis ? ` — Énfasis en ${curso.enfasis}` : ""}
+        </h1>
+        <p className="text-sm text-text-soft mt-1">
+          {etiquetaTurno[curso.turno] ?? curso.turno} · {curso.ciclo}
+        </p>
+      </div>
+
+      <div className="flex gap-2 flex-wrap">
+        <TabButton activo={tab === "asistencia"} onClick={() => setTab("asistencia")}>
+          Asistencia
+        </TabButton>
+        <TabButton activo={tab === "anecdotico"} onClick={() => setTab("anecdotico")}>
+          Registro Anecdótico
+        </TabButton>
+        <TabButton activo={tab === "calificaciones"} onClick={() => setTab("calificaciones")}>
+          Calificaciones
+        </TabButton>
+      </div>
+
+      {estudiantes.length === 0 && (
+        <div className="bg-card border border-border rounded-xl p-5 text-sm text-text-soft">
+          Todavía no hay estudiantes activos cargados en este curso.
+        </div>
+      )}
+
+      {estudiantes.length > 0 && tab === "asistencia" && (
+        <PanelAsistencia cursoId={cursoId} estudiantes={estudiantes} supabase={supabase} />
+      )}
+
+      {estudiantes.length > 0 && tab === "anecdotico" && (
+        <PanelAnecdotico
+          estudiantes={estudiantes}
+          disciplinas={disciplinas}
+          onAgregarMateria={agregarMateria}
+          supabase={supabase}
+        />
+      )}
+
+      {estudiantes.length > 0 && tab === "calificaciones" && (
+        <PanelCalificaciones
+          estudiantes={estudiantes}
+          disciplinas={disciplinas}
+          grado={curso.grado}
+          onAgregarMateria={agregarMateria}
+          supabase={supabase}
+        />
+      )}
+    </div>
+  );
+}
+
+function TabButton({
+  activo,
+  onClick,
+  children,
+}: {
+  activo: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-4 py-2 rounded-lg text-[13px] font-semibold ${
+        activo ? "bg-navy text-white" : "bg-card border border-border text-text-soft"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+// Selector de materia reutilizable, con opción de agregar una nueva al vuelo.
+function SelectorMateria({
+  disciplinas,
+  value,
+  onChange,
+  onAgregarMateria,
+}: {
+  disciplinas: Disciplina[];
+  value: string;
+  onChange: (id: string) => void;
+  onAgregarMateria: (nombre: string) => Promise<void>;
+}) {
+  const [agregando, setAgregando] = useState(false);
+  const [nombreNuevo, setNombreNuevo] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  async function confirmar() {
+    if (!nombreNuevo.trim()) return;
+    setGuardando(true);
+    await onAgregarMateria(nombreNuevo.trim());
+    setNombreNuevo("");
+    setGuardando(false);
+    setAgregando(false);
+  }
+
+  return (
+    <div className="flex flex-col gap-2 w-full sm:max-w-sm">
+      <div className="flex gap-2">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-10 flex-1 rounded-lg border border-border px-3 text-sm bg-card"
+        >
+          <option value="">Seleccionar materia…</option>
+          {disciplinas.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.nombre}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => setAgregando((v) => !v)}
+          className="h-10 px-3 rounded-lg border border-border text-sm font-semibold text-navy bg-card"
+        >
+          + Materia
+        </button>
+      </div>
+      {agregando && (
+        <div className="flex gap-2">
+          <input
+            value={nombreNuevo}
+            onChange={(e) => setNombreNuevo(e.target.value)}
+            placeholder="Nombre de la materia…"
+            className="h-9 flex-1 rounded-md border border-border px-2.5 text-sm bg-card"
+          />
+          <button
+            type="button"
+            disabled={guardando}
+            onClick={confirmar}
+            className="h-9 rounded-md bg-navy text-white text-xs font-semibold px-3 disabled:opacity-50"
+          >
+            Agregar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ========== ASISTENCIA (general por curso, por día) ==========
+function PanelAsistencia({
+  estudiantes,
+  supabase,
+}: {
+  cursoId: string;
+  estudiantes: Estudiante[];
+  supabase: ReturnType<typeof createClient>;
+}) {
+  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [estados, setEstados] = useState<Record<string, string>>({});
+  const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState<string | null>(null);
+
+  const cargar = useCallback(async () => {
+    const { data } = await supabase
+      .from("asistencias")
+      .select("estudiante_id, estado")
+      .eq("fecha", fecha)
+      .in("estudiante_id", estudiantes.map((e) => e.id));
+    const mapa: Record<string, string> = {};
+    estudiantes.forEach((e) => {
+      mapa[e.id] = "presente";
+    });
+    (data ?? []).forEach((a) => {
+      mapa[a.estudiante_id] = a.estado;
+    });
+    setEstados(mapa);
+  }, [fecha, estudiantes, supabase]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos desde Supabase
+    cargar();
+  }, [cargar]);
+
+  async function guardar() {
+    setGuardando(true);
+    setMensaje(null);
+    const filas = estudiantes.map((e) => ({
+      estudiante_id: e.id,
+      fecha,
+      estado: estados[e.id] ?? "presente",
+    }));
+    await supabase.from("asistencias").upsert(filas, { onConflict: "estudiante_id,fecha" });
+    setGuardando(false);
+    setMensaje("Asistencia guardada. Las familias con ausencia o llegada tardía reciben la notificación automáticamente.");
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
+      <label className="flex flex-col gap-1.5 text-[13px] font-medium max-w-xs">
+        Fecha
+        <input
+          type="date"
+          value={fecha}
+          onChange={(e) => setFecha(e.target.value)}
+          className="h-10 rounded-lg border border-border px-3 text-sm bg-card"
+        />
+      </label>
+
+      <div className="flex flex-col border-t border-border pt-3">
+        {estudiantes.map((e) => (
+          <div key={e.id} className="flex items-center justify-between gap-3 py-2 border-b border-border last:border-none">
+            <span className="text-sm">{e.nombre_completo}</span>
+            <select
+              value={estados[e.id] ?? "presente"}
+              onChange={(ev) => setEstados((prev) => ({ ...prev, [e.id]: ev.target.value }))}
+              className="h-9 rounded-md border border-border px-2.5 text-sm bg-card"
+            >
+              <option value="presente">Presente</option>
+              <option value="ausente">Ausente</option>
+              <option value="tardanza">Tardanza</option>
+              <option value="justificado">Justificado</option>
+            </select>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={guardar}
+        disabled={guardando}
+        className="h-11 rounded-lg bg-navy text-white font-semibold text-sm w-full sm:w-fit px-6"
+      >
+        {guardando ? "Guardando…" : "Guardar asistencia del día"}
+      </button>
+      {mensaje && <p className="text-sm text-success">{mensaje}</p>}
+    </div>
+  );
+}
+
+// ========== REGISTRO ANECDÓTICO (por materia) ==========
+function PanelAnecdotico({
+  estudiantes,
+  disciplinas,
+  onAgregarMateria,
+  supabase,
+}: {
+  estudiantes: Estudiante[];
+  disciplinas: Disciplina[];
+  onAgregarMateria: (nombre: string) => Promise<void>;
+  supabase: ReturnType<typeof createClient>;
+}) {
+  const [materiaId, setMateriaId] = useState("");
+  const [estudianteId, setEstudianteId] = useState("");
+  const [categoria, setCategoria] = useState("atencion");
+  const [descripcion, setDescripcion] = useState("");
+  const [registros, setRegistros] = useState<Registro[]>([]);
+  const [guardando, setGuardando] = useState(false);
+
+  const cargarRegistros = useCallback(async () => {
+    if (!estudianteId) {
+      setRegistros([]);
+      return;
+    }
+    const { data } = await supabase
+      .from("registros_anecdoticos")
+      .select("id, fecha, categoria, descripcion, disciplina_id, disciplinas(nombre)")
+      .eq("estudiante_id", estudianteId)
+      .order("fecha", { ascending: false });
+    setRegistros((data as unknown as Registro[]) ?? []);
+  }, [estudianteId, supabase]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos desde Supabase
+    cargarRegistros();
+  }, [cargarRegistros]);
+
+  async function agregar(e: React.FormEvent) {
+    e.preventDefault();
+    if (!estudianteId || !descripcion) return;
+    setGuardando(true);
+    await supabase.from("registros_anecdoticos").insert({
+      estudiante_id: estudianteId,
+      categoria,
+      descripcion,
+      disciplina_id: materiaId || null,
+    });
+    setDescripcion("");
+    setGuardando(false);
+    cargarRegistros();
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
+      <div className="grid sm:grid-cols-2 gap-3">
+        <SelectorMateria
+          disciplinas={disciplinas}
+          value={materiaId}
+          onChange={setMateriaId}
+          onAgregarMateria={onAgregarMateria}
+        />
+        <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+          Estudiante
+          <select
+            value={estudianteId}
+            onChange={(e) => setEstudianteId(e.target.value)}
+            className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
+          >
+            <option value="">Seleccionar estudiante…</option>
+            {estudiantes.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.nombre_completo}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {estudianteId && (
+        <>
+          <form onSubmit={agregar} className="flex flex-col gap-3 border-t border-border pt-4">
+            <select
+              value={categoria}
+              onChange={(e) => setCategoria(e.target.value)}
+              className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card sm:w-fit"
+            >
+              <option value="positivo">Positivo</option>
+              <option value="atencion">A tener en cuenta</option>
+              <option value="conducta">Conducta</option>
+            </select>
+            <textarea
+              value={descripcion}
+              onChange={(e) => setDescripcion(e.target.value)}
+              placeholder="Descripción del registro…"
+              className="rounded-lg border border-border px-3 py-2 text-sm bg-card min-h-20 w-full"
+              required
+            />
+            <button disabled={guardando} className="h-10 rounded-lg bg-navy text-white font-semibold text-sm w-full sm:w-fit px-5">
+              {guardando ? "Guardando…" : "Cargar registro"}
+            </button>
+          </form>
+
+          <div className="flex flex-col border-t border-border pt-3">
+            {registros.map((r) => (
+              <div key={r.id} className="py-2 border-b border-border last:border-none text-sm">
+                <div className="text-xs text-text-soft">
+                  {r.fecha} · {r.categoria}
+                  {r.disciplinas?.nombre ? ` · ${r.disciplinas.nombre}` : ""}
+                </div>
+                <div>{r.descripcion}</div>
+              </div>
+            ))}
+            {registros.length === 0 && <p className="text-sm text-text-soft">Sin registros todavía.</p>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ========== CALIFICACIONES (por materia) ==========
+function PanelCalificaciones({
+  estudiantes,
+  disciplinas,
+  grado,
+  onAgregarMateria,
+  supabase,
+}: {
+  estudiantes: Estudiante[];
+  disciplinas: Disciplina[];
+  grado: string;
+  onAgregarMateria: (nombre: string) => Promise<void>;
+  supabase: ReturnType<typeof createClient>;
+}) {
+  const [materiaId, setMateriaId] = useState("");
+  const [estudianteId, setEstudianteId] = useState("");
+  const [califs, setCalifs] = useState<CalifRow[]>([]);
+  const [guardando, setGuardando] = useState(false);
+
+  const [etapa1, setEtapa1] = useState("");
+  const [etapa2, setEtapa2] = useState("");
+  const [complementario, setComplementario] = useState("");
+  const [regularizacion, setRegularizacion] = useState("");
+
+  useEffect(() => {
+    if (!materiaId && disciplinas.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- preseleccionar la primera materia del curso
+      setMateriaId(disciplinas[0].id);
+    }
+  }, [disciplinas, materiaId]);
+
+  const cargarCalificaciones = useCallback(async () => {
+    if (!estudianteId) {
+      setCalifs([]);
+      return;
+    }
+    const { data } = await supabase
+      .from("calificaciones")
+      .select("id, disciplina_id, instancia, nota")
+      .eq("estudiante_id", estudianteId);
+    setCalifs((data as unknown as CalifRow[]) ?? []);
+  }, [estudianteId, supabase]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos desde Supabase
+    cargarCalificaciones();
+  }, [cargarCalificaciones]);
+
+  const notasPorDisciplina = useMemo(() => {
+    const mapa = new Map<string, NotasPorInstancia>();
+    califs.forEach((c) => {
+      if (c.nota === null) return;
+      const actual = mapa.get(c.disciplina_id) ?? {};
+      actual[c.instancia] = c.nota;
+      mapa.set(c.disciplina_id, actual);
+    });
+    return mapa;
+  }, [califs]);
+
+  const notas = useMemo(() => notasPorDisciplina.get(materiaId) ?? {}, [notasPorDisciplina, materiaId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- precargar los campos con lo ya guardado al cambiar de materia
+    setEtapa1(notas.etapa1?.toString() ?? "");
+    setEtapa2(notas.etapa2?.toString() ?? "");
+    setComplementario(notas.complementario?.toString() ?? "");
+    setRegularizacion(notas.regularizacion?.toString() ?? "");
+  }, [notas]);
+
+  const resultado = evaluarMateria(notas, grado);
+
+  async function guardarEtapas(e: React.FormEvent) {
+    e.preventDefault();
+    if (!estudianteId || !materiaId) return;
+    const e1 = etapa1 ? Number(etapa1) : null;
+    const e2 = etapa2 ? Number(etapa2) : null;
+    if (e1 === null && e2 === null) return;
+
+    setGuardando(true);
+    const filas: { estudiante_id: string; disciplina_id: string; instancia: Instancia; nota: number }[] = [];
+    if (e1 !== null) filas.push({ estudiante_id: estudianteId, disciplina_id: materiaId, instancia: "etapa1", nota: e1 });
+    if (e2 !== null) filas.push({ estudiante_id: estudianteId, disciplina_id: materiaId, instancia: "etapa2", nota: e2 });
+    if (e1 !== null && e2 !== null) {
+      filas.push({
+        estudiante_id: estudianteId,
+        disciplina_id: materiaId,
+        instancia: "ordinaria",
+        nota: calcularOrdinaria(e1, e2),
+      });
+    }
+    await supabase.from("calificaciones").upsert(filas, { onConflict: "estudiante_id,disciplina_id,instancia" });
+    setGuardando(false);
+    cargarCalificaciones();
+  }
+
+  async function guardarInstanciaUnica(instancia: "complementario" | "regularizacion", valor: string) {
+    if (!estudianteId || !materiaId || !valor) return;
+    setGuardando(true);
+    await supabase.from("calificaciones").upsert(
+      { estudiante_id: estudianteId, disciplina_id: materiaId, instancia, nota: Number(valor) },
+      { onConflict: "estudiante_id,disciplina_id,instancia" }
+    );
+    setGuardando(false);
+    cargarCalificaciones();
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
+      <div className="grid sm:grid-cols-2 gap-3">
+        <SelectorMateria
+          disciplinas={disciplinas}
+          value={materiaId}
+          onChange={setMateriaId}
+          onAgregarMateria={onAgregarMateria}
+        />
+        <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+          Estudiante
+          <select
+            value={estudianteId}
+            onChange={(e) => setEstudianteId(e.target.value)}
+            className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
+          >
+            <option value="">Seleccionar estudiante…</option>
+            {estudiantes.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.nombre_completo}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {estudianteId && materiaId && (
+        <div className="flex flex-col gap-4 border-t border-border pt-4">
+          <form onSubmit={guardarEtapas} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium w-full sm:w-28">
+              Etapa 1
+              <input
+                type="number" min={1} max={5} step={1}
+                value={etapa1}
+                onChange={(e) => setEtapa1(e.target.value)}
+                className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium w-full sm:w-28">
+              Etapa 2
+              <input
+                type="number" min={1} max={5} step={1}
+                value={etapa2}
+                onChange={(e) => setEtapa2(e.target.value)}
+                className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card"
+              />
+            </label>
+            <button disabled={guardando} className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-5 w-full sm:w-auto">
+              {guardando ? "Guardando…" : "Guardar etapas"}
+            </button>
+          </form>
+
+          {notas.ordinaria !== undefined && (
+            <div className="text-sm">
+              Ordinaria: <span className="font-semibold">{notas.ordinaria}</span>{" "}
+              <span className={aprueba(notas.ordinaria) ? "text-success" : "text-danger"}>
+                {aprueba(notas.ordinaria) ? "— Aprobada" : "— No aprobada"}
+              </span>
+            </div>
+          )}
+
+          {notas.ordinaria !== undefined && !aprueba(notas.ordinaria) && (
+            <div className="bg-bg rounded-lg p-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+              <label className="flex flex-col gap-1.5 text-[13px] font-medium w-full sm:w-28">
+                Complementario
+                <input
+                  type="number" min={1} max={5} step={1}
+                  value={complementario}
+                  onChange={(e) => setComplementario(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={guardando}
+                onClick={() => guardarInstanciaUnica("complementario", complementario)}
+                className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-5 w-full sm:w-auto"
+              >
+                Guardar complementario
+              </button>
+            </div>
+          )}
+
+          {notas.complementario !== undefined && !aprueba(notas.complementario) && tieneRegularizacion(grado) && (
+            <div className="bg-bg rounded-lg p-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+              <label className="flex flex-col gap-1.5 text-[13px] font-medium w-full sm:w-28">
+                Regularización
+                <input
+                  type="number" min={1} max={5} step={1}
+                  value={regularizacion}
+                  onChange={(e) => setRegularizacion(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={guardando}
+                onClick={() => guardarInstanciaUnica("regularizacion", regularizacion)}
+                className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-5 w-full sm:w-auto"
+              >
+                Guardar regularización
+              </button>
+            </div>
+          )}
+
+          {resultado && (
+            <div
+              className={`rounded-lg px-3 py-2.5 text-sm font-semibold ${
+                resultado.aprobado ? "bg-[#E7F3EB] text-success" : "bg-[#FBEAE8] text-danger"
+              }`}
+            >
+              Nota final ({ETIQUETA_INSTANCIA[resultado.instanciaFinal]}): {resultado.notaFinal} —{" "}
+              {resultado.aprobado ? "Aprobada" : "No aprobada — repite esta materia"}
+            </div>
+          )}
+        </div>
+      )}
+
+      {estudianteId && (
+        <div className="flex flex-col border-t border-border pt-3">
+          {disciplinas.map((d) => {
+            const n = notasPorDisciplina.get(d.id) ?? {};
+            const r = evaluarMateria(n, grado);
+            return (
+              <div key={d.id} className="flex justify-between py-2 border-b border-border last:border-none text-sm">
+                <span>{d.nombre}</span>
+                <span
+                  className={
+                    r === null ? "text-text-soft" : r.aprobado ? "text-success font-semibold" : "text-danger font-semibold"
+                  }
+                >
+                  {r ? `${r.notaFinal} (${ETIQUETA_INSTANCIA[r.instanciaFinal]})` : "Sin notas"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
