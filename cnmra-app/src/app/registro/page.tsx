@@ -68,11 +68,11 @@ export default function RegistroFamilia() {
         </div>
 
         <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-          Tu nombre completo
+          Nombre y apellido del padre, madre o tutor/a
           <input required value={nombre} onChange={(e) => setNombre(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
         </label>
         <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-          Tu cédula de identidad
+          Número de cédula del padre, madre o tutor/a
           <input required value={cedula} onChange={(e) => setCedula(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
         </label>
         <label className="flex flex-col gap-1.5 text-[13px] font-medium">
