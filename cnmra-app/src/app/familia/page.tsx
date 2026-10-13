@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import NotificacionesFamilia from "@/components/NotificacionesFamilia";
 
 export default async function FamiliaInicio() {
   const supabase = await createClient();
@@ -38,6 +39,8 @@ export default async function FamiliaInicio() {
         <h1 className="font-display text-2xl">Hola, {familia?.tutor_nombre?.split(" ")[0] ?? ""}</h1>
         <p className="text-sm text-text-soft mt-1">Así está el proceso de tus hijos.</p>
       </div>
+
+      <NotificacionesFamilia />
 
       {alertas && alertas.length > 0 && (
         <div className="bg-[#FBEAE8] border border-[#F3C9C4] rounded-xl p-4 flex flex-col gap-2">
