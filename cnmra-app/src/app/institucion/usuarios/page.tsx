@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type Perfil = { id: string; nombre_completo: string; rol: string; activo: boolean };
@@ -16,6 +16,7 @@ export default function UsuariosInstitucional() {
   const supabase = createClient();
   const [perfiles, setPerfiles] = useState<Perfil[]>([]);
   const [familias, setFamilias] = useState<Familia[]>([]);
+  const [busqueda, setBusqueda] = useState("");
   const [userId, setUserId] = useState("");
   const [nombre, setNombre] = useState("");
   const [rol, setRol] = useState("carga_datos");
@@ -61,6 +62,16 @@ export default function UsuariosInstitucional() {
   const director = perfiles.find((p) => p.rol === "director");
   const equipo = perfiles.filter((p) => p.rol === "carga_datos");
 
+  const familiasFiltradas = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return familias;
+    return familias.filter(
+      (f) =>
+        f.tutor_nombre.toLowerCase().includes(q) ||
+        f.estudiantes.some((e) => e.nombre_completo.toLowerCase().includes(q))
+    );
+  }, [familias, busqueda]);
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -96,11 +107,19 @@ export default function UsuariosInstitucional() {
       </div>
 
       <div className="bg-card border border-border rounded-xl p-5">
-        <div className="text-[11px] font-semibold text-text-soft tracking-wide mb-3">
-          FAMILIAS INSCRIPTAS ({familias.length})
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <div className="text-[11px] font-semibold text-text-soft tracking-wide">
+            FAMILIAS INSCRIPTAS ({familiasFiltradas.length})
+          </div>
+          <input
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por nombre del responsable o del estudiante…"
+            className="h-10 w-full sm:w-80 rounded-lg border border-border px-3 text-sm bg-card"
+          />
         </div>
         <div className="flex flex-col">
-          {familias.map((f) => (
+          {familiasFiltradas.map((f) => (
             <div key={f.id} className="flex flex-col gap-1 py-3 border-b border-border last:border-none">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm font-medium">{f.tutor_nombre}</span>
@@ -116,7 +135,11 @@ export default function UsuariosInstitucional() {
               </div>
             </div>
           ))}
-          {familias.length === 0 && <p className="text-sm text-text-soft">Todavía no hay familias inscriptas.</p>}
+          {familiasFiltradas.length === 0 && (
+            <p className="text-sm text-text-soft">
+              {familias.length === 0 ? "Todavía no hay familias inscriptas." : "Ningún resultado para esa búsqueda."}
+            </p>
+          )}
         </div>
       </div>
 
