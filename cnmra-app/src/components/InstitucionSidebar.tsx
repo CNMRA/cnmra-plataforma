@@ -76,7 +76,7 @@ export default function InstitucionSidebar({
 
   return (
     <>
-      <div className="hidden md:flex flex-none w-[220px] bg-navy-dark p-4 flex-col gap-7 text-white">
+            <div className="hidden md:flex print:hidden flex-none w-[220px] bg-navy-dark p-4 flex-col gap-7 text-white">
         <div className="flex items-center gap-2.5 px-1">
           <Image src="/logo.jpg" alt="CNMRA" width={32} height={32} className="rounded object-contain" />
           <span className="font-display font-bold text-sm">CNMRA</span>
@@ -85,7 +85,7 @@ export default function InstitucionSidebar({
         {perfilBox}
       </div>
 
-      <div className="md:hidden flex-none bg-navy-dark text-white">
+          <div className="md:hidden print:hidden flex-none bg-navy-dark text-white">
         <div className="h-14 flex items-center justify-between px-4">
           <div className="flex items-center gap-2.5">
             <Image src="/logo.jpg" alt="CNMRA" width={28} height={28} className="rounded object-contain" />
