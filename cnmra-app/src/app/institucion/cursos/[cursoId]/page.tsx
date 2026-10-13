@@ -516,4 +516,147 @@ function FilaCalificaciones({
   const cargar = useCallback(async () => {
     const { data } = await supabase.from("calificaciones").select("id, disciplina_id, instancia, nota").eq("estudiante_id", estudianteId);
     setCalifs((data as unknown as CalifRow[]) ?? []);
-  }, [estudianteId,
+  }, [estudianteId, supabase]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos desde Supabase
+    cargar();
+  }, [cargar]);
+
+  const notasPorDisciplina = useMemo(() => {
+    const mapa = new Map<string, NotasPorInstancia>();
+    califs.forEach((c) => {
+      if (c.nota === null) return;
+      const actual = mapa.get(c.disciplina_id) ?? {};
+      actual[c.instancia] = c.nota;
+      mapa.set(c.disciplina_id, actual);
+    });
+    return mapa;
+  }, [califs]);
+
+  const notas = useMemo(() => notasPorDisciplina.get(materiaId ?? "") ?? {}, [notasPorDisciplina, materiaId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- precargar los campos con lo ya guardado al cambiar de materia
+    setEtapa1(notas.etapa1?.toString() ?? "");
+    setEtapa2(notas.etapa2?.toString() ?? "");
+    setComplementario(notas.complementario?.toString() ?? "");
+    setRegularizacion(notas.regularizacion?.toString() ?? "");
+  }, [notas]);
+
+  const resultado = evaluarMateria(notas, grado);
+
+  async function guardarEtapas(e: React.FormEvent) {
+    e.preventDefault();
+    if (!materiaId) return;
+    const e1 = etapa1 ? Number(etapa1) : null;
+    const e2 = etapa2 ? Number(etapa2) : null;
+    if (e1 === null && e2 === null) return;
+
+    setGuardando(true);
+    const filas: { estudiante_id: string; disciplina_id: string; instancia: Instancia; nota: number }[] = [];
+    if (e1 !== null) filas.push({ estudiante_id: estudianteId, disciplina_id: materiaId, instancia: "etapa1", nota: e1 });
+    if (e2 !== null) filas.push({ estudiante_id: estudianteId, disciplina_id: materiaId, instancia: "etapa2", nota: e2 });
+    if (e1 !== null && e2 !== null) {
+      filas.push({ estudiante_id: estudianteId, disciplina_id: materiaId, instancia: "ordinaria", nota: calcularOrdinaria(e1, e2) });
+    }
+    await supabase.from("calificaciones").upsert(filas, { onConflict: "estudiante_id,disciplina_id,instancia" });
+    setGuardando(false);
+    cargar();
+  }
+
+  async function guardarInstanciaUnica(instancia: "complementario" | "regularizacion", valor: string) {
+    if (!materiaId || !valor) return;
+    setGuardando(true);
+    await supabase
+      .from("calificaciones")
+      .upsert({ estudiante_id: estudianteId, disciplina_id: materiaId, instancia, nota: Number(valor) }, { onConflict: "estudiante_id,disciplina_id,instancia" });
+    setGuardando(false);
+    cargar();
+  }
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-2">
+        {disciplinas.map((d) => (
+          <ChipMateria key={d.id} activo={materiaId === d.id} onClick={() => setMateriaId(d.id)}>
+            {d.nombre}
+          </ChipMateria>
+        ))}
+        <ChipAgregarMateria onAgregarMateria={onAgregarMateria} />
+      </div>
+
+      {materiaId && (
+        <div className="flex flex-col gap-4 bg-bg rounded-lg p-3">
+          <form onSubmit={guardarEtapas} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium w-full sm:w-28">
+              Etapa 1
+              <input type="number" min={1} max={5} step={1} value={etapa1} onChange={(e) => setEtapa1(e.target.value)} className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card" />
+            </label>
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium w-full sm:w-28">
+              Etapa 2
+              <input type="number" min={1} max={5} step={1} value={etapa2} onChange={(e) => setEtapa2(e.target.value)} className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card" />
+            </label>
+            <button disabled={guardando} className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-5 w-full sm:w-auto">
+              {guardando ? "Guardando…" : "Guardar etapas"}
+            </button>
+          </form>
+
+          {notas.ordinaria !== undefined && (
+            <div className="text-sm">
+              Ordinaria: <span className="font-semibold">{notas.ordinaria}</span>{" "}
+              <span className={aprueba(notas.ordinaria) ? "text-success" : "text-danger"}>
+                {aprueba(notas.ordinaria) ? "— Aprobada" : "— No aprobada"}
+              </span>
+            </div>
+          )}
+
+          {notas.ordinaria !== undefined && !aprueba(notas.ordinaria) && (
+            <div className="bg-card rounded-lg p-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+              <label className="flex flex-col gap-1.5 text-[13px] font-medium w-full sm:w-28">
+                Complementario
+                <input type="number" min={1} max={5} step={1} value={complementario} onChange={(e) => setComplementario(e.target.value)} className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card" />
+              </label>
+              <button type="button" disabled={guardando} onClick={() => guardarInstanciaUnica("complementario", complementario)} className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-5 w-full sm:w-auto">
+                Guardar complementario
+              </button>
+            </div>
+          )}
+
+          {notas.complementario !== undefined && !aprueba(notas.complementario) && tieneRegularizacion(grado) && (
+            <div className="bg-card rounded-lg p-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+              <label className="flex flex-col gap-1.5 text-[13px] font-medium w-full sm:w-28">
+                Regularización
+                <input type="number" min={1} max={5} step={1} value={regularizacion} onChange={(e) => setRegularizacion(e.target.value)} className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card" />
+              </label>
+              <button type="button" disabled={guardando} onClick={() => guardarInstanciaUnica("regularizacion", regularizacion)} className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-5 w-full sm:w-auto">
+                Guardar regularización
+              </button>
+            </div>
+          )}
+
+          {resultado && (
+            <div className={`rounded-lg px-3 py-2.5 text-sm font-semibold ${resultado.aprobado ? "bg-[#E7F3EB] text-success" : "bg-[#FBEAE8] text-danger"}`}>
+              Nota final ({ETIQUETA_INSTANCIA[resultado.instanciaFinal]}): {resultado.notaFinal} — {resultado.aprobado ? "Aprobada" : "No aprobada — repite esta materia"}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-col border-t border-border pt-2">
+        {disciplinas.map((d) => {
+          const n = notasPorDisciplina.get(d.id) ?? {};
+          const r = evaluarMateria(n, grado);
+          return (
+            <div key={d.id} className="flex justify-between py-2 border-b border-border last:border-none text-sm">
+              <span>{d.nombre}</span>
+              <span className={r === null ? "text-text-soft" : r.aprobado ? "text-success font-semibold" : "text-danger font-semibold"}>
+                {r ? `${r.notaFinal} (${ETIQUETA_INSTANCIA[r.instanciaFinal]})` : "Sin notas"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
