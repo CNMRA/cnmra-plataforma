@@ -6,6 +6,15 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import InstallButton from "@/components/InstallButton";
 
+const ANIO_FUNDACION = 1980;
+
+/** Años desde la fundación (3 de marzo de 1980), sumando uno recién a partir de esa fecha cada año. */
+function aniosDesdeFundacion(hoy: Date): number {
+  const fundacionEsteAnio = new Date(hoy.getFullYear(), 2, 3); // 3 de marzo
+  const yaPaso = hoy.getTime() >= fundacionEsteAnio.getTime();
+  return hoy.getFullYear() - ANIO_FUNDACION - (yaPaso ? 0 : 1);
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -13,6 +22,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const anios = aniosDesdeFundacion(new Date());
 
   async function ingresar(e: React.FormEvent) {
     e.preventDefault();
@@ -65,21 +75,24 @@ export default function LoginPage() {
               </div>
             </div>
             <span className="text-[10px] font-semibold text-gold border border-gold/50 rounded-full px-3 py-1 whitespace-nowrap">
-              DESDE 1980
+              DESDE 1980 · {anios} AÑOS
             </span>
           </div>
 
           <div>
-            <span className="inline-flex items-center gap-2 bg-white/10 border border-white/15 rounded-full px-3 py-1 text-[10px] tracking-wide text-gold mb-4">
-              PROYECTO EDUCATIVO INSTITUCIONAL 2026–2030
+            <span className="inline-flex items-center gap-2 bg-white/10 border border-white/15 rounded-full px-4 py-1.5 text-base font-bold tracking-wide text-gold mb-4">
+              2026–2030
             </span>
             <h1 className="font-display text-3xl leading-tight max-w-sm">
-              Una educación de calidad, como bien público y derecho de todos.
+              Una educación de calidad, como bien público y derecho de todos y todas.
             </h1>
             <p className="text-sm leading-relaxed text-white/75 max-w-sm mt-4">
-              Nuestra visión: una institución que brinda educación integral basada
-              en valores éticos y democráticos, que promueve la participación, la
-              inclusión y la interculturalidad.
+              Nuestra visión: ser un <i>ñanderekoha</i> educativo, promoviendo el
+              bienestar, la autenticidad de cada persona y el compromiso colectivo
+              con la equidad, la justicia social y la formación integral,
+              sustentada en valores humanos, democráticos e inclusivos, donde la
+              diversidad es reconocida como una fuente de aprendizaje y de
+              transformación social.
             </p>
           </div>
         </div>
