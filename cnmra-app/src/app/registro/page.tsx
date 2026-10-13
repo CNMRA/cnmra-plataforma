@@ -10,6 +10,7 @@ export default function RegistroFamilia() {
   const router = useRouter();
   const [nombre, setNombre] = useState("");
   const [cedula, setCedula] = useState("");
+  const [telefono, setTelefono] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -37,9 +38,13 @@ export default function RegistroFamilia() {
       return;
     }
 
-    const { error: errorFamilia } = await supabase
-      .from("familias")
-      .insert({ tutor_perfil_id: data.user.id, tutor_nombre: nombre, tutor_cedula: cedula, tutor_email: email });
+    const { error: errorFamilia } = await supabase.from("familias").insert({
+      tutor_perfil_id: data.user.id,
+      tutor_nombre: nombre,
+      tutor_cedula: cedula,
+      tutor_telefono: telefono,
+      tutor_email: email,
+    });
 
     if (errorFamilia) {
       setError("Perfil creado, pero no se pudo guardar la familia: " + errorFamilia.message);
@@ -69,6 +74,17 @@ export default function RegistroFamilia() {
         <label className="flex flex-col gap-1.5 text-[13px] font-medium">
           Tu cédula de identidad
           <input required value={cedula} onChange={(e) => setCedula(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
+        </label>
+        <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+          Tu número de teléfono
+          <input
+            required
+            type="tel"
+            placeholder="0981 123 456"
+            value={telefono}
+            onChange={(e) => setTelefono(e.target.value)}
+            className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
+          />
         </label>
         <label className="flex flex-col gap-1.5 text-[13px] font-medium">
           Correo electrónico
