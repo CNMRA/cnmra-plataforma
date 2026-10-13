@@ -9,6 +9,8 @@ export default function InscripcionFamilia() {
   const supabase = createClient();
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [nombre, setNombre] = useState("");
+  const [cedula, setCedula] = useState("");
+  const [sinCedula, setSinCedula] = useState(false);
   const [fechaNacimiento, setFechaNacimiento] = useState("");
   const [cursoId, setCursoId] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -20,6 +22,12 @@ export default function InscripcionFamilia() {
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
+
+    if (!sinCedula && !cedula.trim()) {
+      setMensaje("Ingresá el número de cédula, o marcá \"No tiene cédula todavía\".");
+      return;
+    }
+
     setGuardando(true);
     setMensaje(null);
 
@@ -47,7 +55,12 @@ export default function InscripcionFamilia() {
 
     const { data: estudiante, error: errorEstudiante } = await supabase
       .from("estudiantes")
-      .insert({ familia_id: familia.id, nombre_completo: nombre, fecha_nacimiento: fechaNacimiento || null })
+      .insert({
+        familia_id: familia.id,
+        nombre_completo: nombre,
+        cedula: sinCedula ? null : cedula.trim(),
+        fecha_nacimiento: fechaNacimiento || null,
+      })
       .select("id")
       .single();
 
@@ -61,6 +74,8 @@ export default function InscripcionFamilia() {
 
     setMensaje("Inscripción enviada. La institución la va a revisar.");
     setNombre("");
+    setCedula("");
+    setSinCedula(false);
     setFechaNacimiento("");
     setCursoId("");
     setGuardando(false);
@@ -78,6 +93,31 @@ export default function InscripcionFamilia() {
           Nombre completo del hijo/a
           <input required value={nombre} onChange={(e) => setNombre(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
         </label>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+            Número de cédula del hijo/a
+            <input
+              required={!sinCedula}
+              disabled={sinCedula}
+              value={cedula}
+              onChange={(e) => setCedula(e.target.value)}
+              className="h-11 rounded-lg border border-border px-3 text-sm bg-card disabled:opacity-50"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-[13px] text-text-soft">
+            <input
+              type="checkbox"
+              checked={sinCedula}
+              onChange={(e) => {
+                setSinCedula(e.target.checked);
+                if (e.target.checked) setCedula("");
+              }}
+            />
+            No tiene cédula todavía
+          </label>
+        </div>
+
         <label className="flex flex-col gap-1.5 text-[13px] font-medium">
           Fecha de nacimiento
           <input type="date" value={fechaNacimiento} onChange={(e) => setFechaNacimiento(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
