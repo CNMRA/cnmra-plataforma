@@ -327,3 +327,344 @@ function PanelAsistencia({ estudiantes, supabase }: { estudiantes: Estudiante[];
         {guardando ? "Guardando…" : "Guardar asistencia del día"}
       </button>
       {mensaje && <p className="text-sm text-success">{mensaje}</p>}
+    </div>
+  );
+}
+
+// ========== REGISTRO ANECDÓTICO (lista de estudiantes → materia → cargar) ==========
+function PanelAnecdotico({
+  estudiantes,
+  disciplinas,
+  onAgregarMateria,
+  supabase,
+}: {
+  estudiantes: Estudiante[];
+  disciplinas: Disciplina[];
+  onAgregarMateria: (nombre: string) => Promise<void>;
+  supabase: Supa;
+}) {
+  const [abiertoId, setAbiertoId] = useState<string | null>(null);
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 flex flex-col">
+      {estudiantes.map((e) => (
+        <FilaEstudiante
+          key={e.id}
+          nombre={e.nombre_completo}
+          abierto={abiertoId === e.id}
+          onToggle={() => setAbiertoId(abiertoId === e.id ? null : e.id)}
+        >
+          <FilaAnecdotico estudianteId={e.id} disciplinas={disciplinas} onAgregarMateria={onAgregarMateria} supabase={supabase} />
+        </FilaEstudiante>
+      ))}
+    </div>
+  );
+}
+
+function FilaAnecdotico({
+  estudianteId,
+  disciplinas,
+  onAgregarMateria,
+  supabase,
+}: {
+  estudianteId: string;
+  disciplinas: Disciplina[];
+  onAgregarMateria: (nombre: string) => Promise<void>;
+  supabase: Supa;
+}) {
+  const [materiaId, setMateriaId] = useState<string | null>(null);
+  const [categoria, setCategoria] = useState("atencion");
+  const [descripcion, setDescripcion] = useState("");
+  const [registros, setRegistros] = useState<Registro[]>([]);
+  const [guardando, setGuardando] = useState(false);
+
+  const cargar = useCallback(async () => {
+    const { data } = await supabase
+      .from("registros_anecdoticos")
+      .select("id, fecha, categoria, descripcion, disciplina_id, disciplinas(nombre)")
+      .eq("estudiante_id", estudianteId)
+      .order("fecha", { ascending: false });
+    setRegistros((data as unknown as Registro[]) ?? []);
+  }, [estudianteId, supabase]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos desde Supabase
+    cargar();
+  }, [cargar]);
+
+  async function agregar(e: React.FormEvent) {
+    e.preventDefault();
+    if (materiaId === null || !descripcion) return;
+    setGuardando(true);
+    await supabase.from("registros_anecdoticos").insert({
+      estudiante_id: estudianteId,
+      categoria,
+      descripcion,
+      disciplina_id: materiaId || null,
+    });
+    setDescripcion("");
+    setGuardando(false);
+    cargar();
+  }
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-2">
+        <ChipMateria activo={materiaId === ""} onClick={() => setMateriaId("")}>
+          General
+        </ChipMateria>
+        {disciplinas.map((d) => (
+          <ChipMateria key={d.id} activo={materiaId === d.id} onClick={() => setMateriaId(d.id)}>
+            {d.nombre}
+          </ChipMateria>
+        ))}
+        <ChipAgregarMateria onAgregarMateria={onAgregarMateria} />
+      </div>
+
+      {materiaId !== null && (
+        <form onSubmit={agregar} className="flex flex-col gap-3 bg-bg rounded-lg p-3">
+          <select
+            value={categoria}
+            onChange={(e) => setCategoria(e.target.value)}
+            className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card sm:w-fit"
+          >
+            <option value="positivo">Positivo</option>
+            <option value="atencion">A tener en cuenta</option>
+            <option value="conducta">Conducta</option>
+          </select>
+          <textarea
+            value={descripcion}
+            onChange={(e) => setDescripcion(e.target.value)}
+            placeholder="Descripción del registro…"
+            className="rounded-lg border border-border px-3 py-2 text-sm bg-card min-h-20 w-full"
+            required
+          />
+          <button disabled={guardando} className="h-10 rounded-lg bg-navy text-white font-semibold text-sm w-full sm:w-fit px-5">
+            {guardando ? "Guardando…" : "Cargar registro"}
+          </button>
+        </form>
+      )}
+
+      <div className="flex flex-col border-t border-border pt-2">
+        {registros.map((r) => (
+          <div key={r.id} className="py-2 border-b border-border last:border-none text-sm">
+            <div className="text-xs text-text-soft">
+              {r.fecha} · {r.categoria}
+              {r.disciplinas?.nombre ? ` · ${r.disciplinas.nombre}` : ""}
+            </div>
+            <div>{r.descripcion}</div>
+          </div>
+        ))}
+        {registros.length === 0 && <p className="text-sm text-text-soft">Sin registros todavía.</p>}
+      </div>
+    </>
+  );
+}
+
+// ========== CALIFICACIONES (lista de estudiantes → materia → cargar notas) ==========
+function PanelCalificaciones({
+  estudiantes,
+  disciplinas,
+  grado,
+  onAgregarMateria,
+  supabase,
+}: {
+  estudiantes: Estudiante[];
+  disciplinas: Disciplina[];
+  grado: string;
+  onAgregarMateria: (nombre: string) => Promise<void>;
+  supabase: Supa;
+}) {
+  const [abiertoId, setAbiertoId] = useState<string | null>(null);
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 flex flex-col">
+      {estudiantes.map((e) => (
+        <FilaEstudiante
+          key={e.id}
+          nombre={e.nombre_completo}
+          abierto={abiertoId === e.id}
+          onToggle={() => setAbiertoId(abiertoId === e.id ? null : e.id)}
+        >
+          <FilaCalificaciones
+            estudianteId={e.id}
+            disciplinas={disciplinas}
+            grado={grado}
+            onAgregarMateria={onAgregarMateria}
+            supabase={supabase}
+          />
+        </FilaEstudiante>
+      ))}
+    </div>
+  );
+}
+
+function FilaCalificaciones({
+  estudianteId,
+  disciplinas,
+  grado,
+  onAgregarMateria,
+  supabase,
+}: {
+  estudianteId: string;
+  disciplinas: Disciplina[];
+  grado: string;
+  onAgregarMateria: (nombre: string) => Promise<void>;
+  supabase: Supa;
+}) {
+  const [materiaId, setMateriaId] = useState<string | null>(null);
+  const [califs, setCalifs] = useState<CalifRow[]>([]);
+  const [guardando, setGuardando] = useState(false);
+
+  const [etapa1, setEtapa1] = useState("");
+  const [etapa2, setEtapa2] = useState("");
+  const [complementario, setComplementario] = useState("");
+  const [regularizacion, setRegularizacion] = useState("");
+
+  const cargar = useCallback(async () => {
+    const { data } = await supabase.from("calificaciones").select("id, disciplina_id, instancia, nota").eq("estudiante_id", estudianteId);
+    setCalifs((data as unknown as CalifRow[]) ?? []);
+  }, [estudianteId, supabase]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos desde Supabase
+    cargar();
+  }, [cargar]);
+
+  const notasPorDisciplina = useMemo(() => {
+    const mapa = new Map<string, NotasPorInstancia>();
+    califs.forEach((c) => {
+      if (c.nota === null) return;
+      const actual = mapa.get(c.disciplina_id) ?? {};
+      actual[c.instancia] = c.nota;
+      mapa.set(c.disciplina_id, actual);
+    });
+    return mapa;
+  }, [califs]);
+
+  const notas = useMemo(() => notasPorDisciplina.get(materiaId ?? "") ?? {}, [notasPorDisciplina, materiaId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- precargar los campos con lo ya guardado al cambiar de materia
+    setEtapa1(notas.etapa1?.toString() ?? "");
+    setEtapa2(notas.etapa2?.toString() ?? "");
+    setComplementario(notas.complementario?.toString() ?? "");
+    setRegularizacion(notas.regularizacion?.toString() ?? "");
+  }, [notas]);
+
+  const resultado = evaluarMateria(notas, grado);
+
+  async function guardarEtapas(e: React.FormEvent) {
+    e.preventDefault();
+    if (!materiaId) return;
+    const e1 = etapa1 ? Number(etapa1) : null;
+    const e2 = etapa2 ? Number(etapa2) : null;
+    if (e1 === null && e2 === null) return;
+
+    setGuardando(true);
+    const filas: { estudiante_id: string; disciplina_id: string; instancia: Instancia; nota: number }[] = [];
+    if (e1 !== null) filas.push({ estudiante_id: estudianteId, disciplina_id: materiaId, instancia: "etapa1", nota: e1 });
+    if (e2 !== null) filas.push({ estudiante_id: estudianteId, disciplina_id: materiaId, instancia: "etapa2", nota: e2 });
+    if (e1 !== null && e2 !== null) {
+      filas.push({ estudiante_id: estudianteId, disciplina_id: materiaId, instancia: "ordinaria", nota: calcularOrdinaria(e1, e2) });
+    }
+    await supabase.from("calificaciones").upsert(filas, { onConflict: "estudiante_id,disciplina_id,instancia" });
+    setGuardando(false);
+    cargar();
+  }
+
+  async function guardarInstanciaUnica(instancia: "complementario" | "regularizacion", valor: string) {
+    if (!materiaId || !valor) return;
+    setGuardando(true);
+    await supabase
+      .from("calificaciones")
+      .upsert({ estudiante_id: estudianteId, disciplina_id: materiaId, instancia, nota: Number(valor) }, { onConflict: "estudiante_id,disciplina_id,instancia" });
+    setGuardando(false);
+    cargar();
+  }
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-2">
+        {disciplinas.map((d) => (
+          <ChipMateria key={d.id} activo={materiaId === d.id} onClick={() => setMateriaId(d.id)}>
+            {d.nombre}
+          </ChipMateria>
+        ))}
+        <ChipAgregarMateria onAgregarMateria={onAgregarMateria} />
+      </div>
+
+      {materiaId && (
+        <div className="flex flex-col gap-4 bg-bg rounded-lg p-3">
+          <form onSubmit={guardarEtapas} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium w-full sm:w-28">
+              Etapa 1
+              <input type="number" min={1} max={5} step={1} value={etapa1} onChange={(e) => setEtapa1(e.target.value)} className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card" />
+            </label>
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium w-full sm:w-28">
+              Etapa 2
+              <input type="number" min={1} max={5} step={1} value={etapa2} onChange={(e) => setEtapa2(e.target.value)} className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card" />
+            </label>
+            <button disabled={guardando} className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-5 w-full sm:w-auto">
+              {guardando ? "Guardando…" : "Guardar etapas"}
+            </button>
+          </form>
+
+          {notas.ordinaria !== undefined && (
+            <div className="text-sm">
+              Ordinaria: <span className="font-semibold">{notas.ordinaria}</span>{" "}
+              <span className={aprueba(notas.ordinaria) ? "text-success" : "text-danger"}>
+                {aprueba(notas.ordinaria) ? "— Aprobada" : "— No aprobada"}
+              </span>
+            </div>
+          )}
+
+          {notas.ordinaria !== undefined && !aprueba(notas.ordinaria) && (
+            <div className="bg-card rounded-lg p-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+              <label className="flex flex-col gap-1.5 text-[13px] font-medium w-full sm:w-28">
+                Complementario
+                <input type="number" min={1} max={5} step={1} value={complementario} onChange={(e) => setComplementario(e.target.value)} className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card" />
+              </label>
+              <button type="button" disabled={guardando} onClick={() => guardarInstanciaUnica("complementario", complementario)} className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-5 w-full sm:w-auto">
+                Guardar complementario
+              </button>
+            </div>
+          )}
+
+          {notas.complementario !== undefined && !aprueba(notas.complementario) && tieneRegularizacion(grado) && (
+            <div className="bg-card rounded-lg p-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+              <label className="flex flex-col gap-1.5 text-[13px] font-medium w-full sm:w-28">
+                Regularización
+                <input type="number" min={1} max={5} step={1} value={regularizacion} onChange={(e) => setRegularizacion(e.target.value)} className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card" />
+              </label>
+              <button type="button" disabled={guardando} onClick={() => guardarInstanciaUnica("regularizacion", regularizacion)} className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-5 w-full sm:w-auto">
+                Guardar regularización
+              </button>
+            </div>
+          )}
+
+          {resultado && (
+            <div className={`rounded-lg px-3 py-2.5 text-sm font-semibold ${resultado.aprobado ? "bg-[#E7F3EB] text-success" : "bg-[#FBEAE8] text-danger"}`}>
+              Nota final ({ETIQUETA_INSTANCIA[resultado.instanciaFinal]}): {resultado.notaFinal} — {resultado.aprobado ? "Aprobada" : "No aprobada — repite esta materia"}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-col border-t border-border pt-2">
+        {disciplinas.map((d) => {
+          const n = notasPorDisciplina.get(d.id) ?? {};
+          const r = evaluarMateria(n, grado);
+          return (
+            <div key={d.id} className="flex justify-between py-2 border-b border-border last:border-none text-sm">
+              <span>{d.nombre}</span>
+              <span className={r === null ? "text-text-soft" : r.aprobado ? "text-success font-semibold" : "text-danger font-semibold"}>
+                {r ? `${r.notaFinal} (${ETIQUETA_INSTANCIA[r.instanciaFinal]})` : "Sin notas"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
