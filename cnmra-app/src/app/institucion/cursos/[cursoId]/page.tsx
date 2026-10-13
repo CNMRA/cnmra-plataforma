@@ -27,6 +27,7 @@ type Registro = {
 type CalifRow = { id: string; disciplina_id: string; instancia: Instancia; nota: number | null };
 
 type Tab = "asistencia" | "anecdotico" | "calificaciones";
+type Supa = ReturnType<typeof createClient>;
 
 const etiquetaTurno: Record<string, string> = {
   mañana: "Turno mañana",
@@ -133,16 +134,11 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
       )}
 
       {estudiantes.length > 0 && tab === "asistencia" && (
-        <PanelAsistencia cursoId={cursoId} estudiantes={estudiantes} supabase={supabase} />
+        <PanelAsistencia estudiantes={estudiantes} supabase={supabase} />
       )}
 
       {estudiantes.length > 0 && tab === "anecdotico" && (
-        <PanelAnecdotico
-          estudiantes={estudiantes}
-          disciplinas={disciplinas}
-          onAgregarMateria={agregarMateria}
-          supabase={supabase}
-        />
+        <PanelAnecdotico estudiantes={estudiantes} disciplinas={disciplinas} onAgregarMateria={agregarMateria} supabase={supabase} />
       )}
 
       {estudiantes.length > 0 && tab === "calificaciones" && (
@@ -158,15 +154,7 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
   );
 }
 
-function TabButton({
-  activo,
-  onClick,
-  children,
-}: {
-  activo: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+function TabButton({ activo, onClick, children }: { activo: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
@@ -180,85 +168,93 @@ function TabButton({
   );
 }
 
-// Selector de materia reutilizable, con opción de agregar una nueva al vuelo.
-function SelectorMateria({
-  disciplinas,
-  value,
-  onChange,
-  onAgregarMateria,
-}: {
-  disciplinas: Disciplina[];
-  value: string;
-  onChange: (id: string) => void;
-  onAgregarMateria: (nombre: string) => Promise<void>;
-}) {
-  const [agregando, setAgregando] = useState(false);
-  const [nombreNuevo, setNombreNuevo] = useState("");
+// Chip "+ Materia" reutilizable: agrega una materia nueva al curso sin salir de la pantalla.
+function ChipAgregarMateria({ onAgregarMateria }: { onAgregarMateria: (nombre: string) => Promise<void> }) {
+  const [abierto, setAbierto] = useState(false);
+  const [nombre, setNombre] = useState("");
   const [guardando, setGuardando] = useState(false);
 
   async function confirmar() {
-    if (!nombreNuevo.trim()) return;
+    if (!nombre.trim()) return;
     setGuardando(true);
-    await onAgregarMateria(nombreNuevo.trim());
-    setNombreNuevo("");
+    await onAgregarMateria(nombre.trim());
+    setNombre("");
     setGuardando(false);
-    setAgregando(false);
+    setAbierto(false);
+  }
+
+  if (!abierto) {
+    return (
+      <button
+        type="button"
+        onClick={() => setAbierto(true)}
+        className="px-3 py-1.5 rounded-full text-xs font-semibold border border-dashed border-border text-text-soft"
+      >
+        + Materia
+      </button>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-2 w-full sm:max-w-sm">
-      <div className="flex gap-2">
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-10 flex-1 rounded-lg border border-border px-3 text-sm bg-card"
-        >
-          <option value="">Seleccionar materia…</option>
-          {disciplinas.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.nombre}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          onClick={() => setAgregando((v) => !v)}
-          className="h-10 px-3 rounded-lg border border-border text-sm font-semibold text-navy bg-card"
-        >
-          + Materia
-        </button>
-      </div>
-      {agregando && (
-        <div className="flex gap-2">
-          <input
-            value={nombreNuevo}
-            onChange={(e) => setNombreNuevo(e.target.value)}
-            placeholder="Nombre de la materia…"
-            className="h-9 flex-1 rounded-md border border-border px-2.5 text-sm bg-card"
-          />
-          <button
-            type="button"
-            disabled={guardando}
-            onClick={confirmar}
-            className="h-9 rounded-md bg-navy text-white text-xs font-semibold px-3 disabled:opacity-50"
-          >
-            Agregar
-          </button>
-        </div>
-      )}
+    <div className="flex items-center gap-1.5">
+      <input
+        autoFocus
+        value={nombre}
+        onChange={(e) => setNombre(e.target.value)}
+        placeholder="Nombre…"
+        className="h-8 w-32 rounded-full border border-border px-3 text-xs bg-card"
+      />
+      <button
+        type="button"
+        disabled={guardando}
+        onClick={confirmar}
+        className="h-8 px-3 rounded-full bg-navy text-white text-xs font-semibold disabled:opacity-50"
+      >
+        OK
+      </button>
+    </div>
+  );
+}
+
+function ChipMateria({ activo, onClick, children }: { activo: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${
+        activo ? "bg-navy text-white border-navy" : "bg-card border-border text-text-soft"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+// Fila de estudiante desplegable, reutilizada por Registro Anecdótico y Calificaciones.
+function FilaEstudiante({
+  nombre,
+  abierto,
+  onToggle,
+  children,
+}: {
+  nombre: string;
+  abierto: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border-b border-border last:border-none">
+      <button type="button" onClick={onToggle} className="w-full flex items-center justify-between py-3 text-sm font-medium text-left">
+        {nombre}
+        <span className="text-text-soft text-xs">{abierto ? "▲" : "▼"}</span>
+      </button>
+      {abierto && <div className="pb-4 flex flex-col gap-3">{children}</div>}
     </div>
   );
 }
 
 // ========== ASISTENCIA (general por curso, por día) ==========
-function PanelAsistencia({
-  estudiantes,
-  supabase,
-}: {
-  cursoId: string;
-  estudiantes: Estudiante[];
-  supabase: ReturnType<typeof createClient>;
-}) {
+function PanelAsistencia({ estudiantes, supabase }: { estudiantes: Estudiante[]; supabase: Supa }) {
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [estados, setEstados] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
@@ -288,11 +284,7 @@ function PanelAsistencia({
   async function guardar() {
     setGuardando(true);
     setMensaje(null);
-    const filas = estudiantes.map((e) => ({
-      estudiante_id: e.id,
-      fecha,
-      estado: estados[e.id] ?? "presente",
-    }));
+    const filas = estudiantes.map((e) => ({ estudiante_id: e.id, fecha, estado: estados[e.id] ?? "presente" }));
     await supabase.from("asistencias").upsert(filas, { onConflict: "estudiante_id,fecha" });
     setGuardando(false);
     setMensaje("Asistencia guardada. Las familias con ausencia o llegada tardía reciben la notificación automáticamente.");
@@ -302,12 +294,7 @@ function PanelAsistencia({
     <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
       <label className="flex flex-col gap-1.5 text-[13px] font-medium max-w-xs">
         Fecha
-        <input
-          type="date"
-          value={fecha}
-          onChange={(e) => setFecha(e.target.value)}
-          className="h-10 rounded-lg border border-border px-3 text-sm bg-card"
-        />
+        <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="h-10 rounded-lg border border-border px-3 text-sm bg-card" />
       </label>
 
       <div className="flex flex-col border-t border-border pt-3">
@@ -328,11 +315,7 @@ function PanelAsistencia({
         ))}
       </div>
 
-      <button
-        onClick={guardar}
-        disabled={guardando}
-        className="h-11 rounded-lg bg-navy text-white font-semibold text-sm w-full sm:w-fit px-6"
-      >
+      <button onClick={guardar} disabled={guardando} className="h-11 rounded-lg bg-navy text-white font-semibold text-sm w-full sm:w-fit px-6">
         {guardando ? "Guardando…" : "Guardar asistencia del día"}
       </button>
       {mensaje && <p className="text-sm text-success">{mensaje}</p>}
@@ -340,7 +323,7 @@ function PanelAsistencia({
   );
 }
 
-// ========== REGISTRO ANECDÓTICO (por materia) ==========
+// ========== REGISTRO ANECDÓTICO (lista de estudiantes → materia → cargar) ==========
 function PanelAnecdotico({
   estudiantes,
   disciplinas,
@@ -350,20 +333,44 @@ function PanelAnecdotico({
   estudiantes: Estudiante[];
   disciplinas: Disciplina[];
   onAgregarMateria: (nombre: string) => Promise<void>;
-  supabase: ReturnType<typeof createClient>;
+  supabase: Supa;
 }) {
-  const [materiaId, setMateriaId] = useState("");
-  const [estudianteId, setEstudianteId] = useState("");
+  const [abiertoId, setAbiertoId] = useState<string | null>(null);
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 flex flex-col">
+      {estudiantes.map((e) => (
+        <FilaEstudiante
+          key={e.id}
+          nombre={e.nombre_completo}
+          abierto={abiertoId === e.id}
+          onToggle={() => setAbiertoId(abiertoId === e.id ? null : e.id)}
+        >
+          <FilaAnecdotico estudianteId={e.id} disciplinas={disciplinas} onAgregarMateria={onAgregarMateria} supabase={supabase} />
+        </FilaEstudiante>
+      ))}
+    </div>
+  );
+}
+
+function FilaAnecdotico({
+  estudianteId,
+  disciplinas,
+  onAgregarMateria,
+  supabase,
+}: {
+  estudianteId: string;
+  disciplinas: Disciplina[];
+  onAgregarMateria: (nombre: string) => Promise<void>;
+  supabase: Supa;
+}) {
+  const [materiaId, setMateriaId] = useState<string | null>(null);
   const [categoria, setCategoria] = useState("atencion");
   const [descripcion, setDescripcion] = useState("");
   const [registros, setRegistros] = useState<Registro[]>([]);
   const [guardando, setGuardando] = useState(false);
 
-  const cargarRegistros = useCallback(async () => {
-    if (!estudianteId) {
-      setRegistros([]);
-      return;
-    }
+  const cargar = useCallback(async () => {
     const { data } = await supabase
       .from("registros_anecdoticos")
       .select("id, fecha, categoria, descripcion, disciplina_id, disciplinas(nombre)")
@@ -374,12 +381,12 @@ function PanelAnecdotico({
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos desde Supabase
-    cargarRegistros();
-  }, [cargarRegistros]);
+    cargar();
+  }, [cargar]);
 
   async function agregar(e: React.FormEvent) {
     e.preventDefault();
-    if (!estudianteId || !descripcion) return;
+    if (materiaId === null || !descripcion) return;
     setGuardando(true);
     await supabase.from("registros_anecdoticos").insert({
       estudiante_id: estudianteId,
@@ -389,78 +396,64 @@ function PanelAnecdotico({
     });
     setDescripcion("");
     setGuardando(false);
-    cargarRegistros();
+    cargar();
   }
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
-      <div className="grid sm:grid-cols-2 gap-3">
-        <SelectorMateria
-          disciplinas={disciplinas}
-          value={materiaId}
-          onChange={setMateriaId}
-          onAgregarMateria={onAgregarMateria}
-        />
-        <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-          Estudiante
-          <select
-            value={estudianteId}
-            onChange={(e) => setEstudianteId(e.target.value)}
-            className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
-          >
-            <option value="">Seleccionar estudiante…</option>
-            {estudiantes.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.nombre_completo}
-              </option>
-            ))}
-          </select>
-        </label>
+    <>
+      <div className="flex flex-wrap gap-2">
+        <ChipMateria activo={materiaId === ""} onClick={() => setMateriaId("")}>
+          General
+        </ChipMateria>
+        {disciplinas.map((d) => (
+          <ChipMateria key={d.id} activo={materiaId === d.id} onClick={() => setMateriaId(d.id)}>
+            {d.nombre}
+          </ChipMateria>
+        ))}
+        <ChipAgregarMateria onAgregarMateria={onAgregarMateria} />
       </div>
 
-      {estudianteId && (
-        <>
-          <form onSubmit={agregar} className="flex flex-col gap-3 border-t border-border pt-4">
-            <select
-              value={categoria}
-              onChange={(e) => setCategoria(e.target.value)}
-              className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card sm:w-fit"
-            >
-              <option value="positivo">Positivo</option>
-              <option value="atencion">A tener en cuenta</option>
-              <option value="conducta">Conducta</option>
-            </select>
-            <textarea
-              value={descripcion}
-              onChange={(e) => setDescripcion(e.target.value)}
-              placeholder="Descripción del registro…"
-              className="rounded-lg border border-border px-3 py-2 text-sm bg-card min-h-20 w-full"
-              required
-            />
-            <button disabled={guardando} className="h-10 rounded-lg bg-navy text-white font-semibold text-sm w-full sm:w-fit px-5">
-              {guardando ? "Guardando…" : "Cargar registro"}
-            </button>
-          </form>
-
-          <div className="flex flex-col border-t border-border pt-3">
-            {registros.map((r) => (
-              <div key={r.id} className="py-2 border-b border-border last:border-none text-sm">
-                <div className="text-xs text-text-soft">
-                  {r.fecha} · {r.categoria}
-                  {r.disciplinas?.nombre ? ` · ${r.disciplinas.nombre}` : ""}
-                </div>
-                <div>{r.descripcion}</div>
-              </div>
-            ))}
-            {registros.length === 0 && <p className="text-sm text-text-soft">Sin registros todavía.</p>}
-          </div>
-        </>
+      {materiaId !== null && (
+        <form onSubmit={agregar} className="flex flex-col gap-3 bg-bg rounded-lg p-3">
+          <select
+            value={categoria}
+            onChange={(e) => setCategoria(e.target.value)}
+            className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card sm:w-fit"
+          >
+            <option value="positivo">Positivo</option>
+            <option value="atencion">A tener en cuenta</option>
+            <option value="conducta">Conducta</option>
+          </select>
+          <textarea
+            value={descripcion}
+            onChange={(e) => setDescripcion(e.target.value)}
+            placeholder="Descripción del registro…"
+            className="rounded-lg border border-border px-3 py-2 text-sm bg-card min-h-20 w-full"
+            required
+          />
+          <button disabled={guardando} className="h-10 rounded-lg bg-navy text-white font-semibold text-sm w-full sm:w-fit px-5">
+            {guardando ? "Guardando…" : "Cargar registro"}
+          </button>
+        </form>
       )}
-    </div>
+
+      <div className="flex flex-col border-t border-border pt-2">
+        {registros.map((r) => (
+          <div key={r.id} className="py-2 border-b border-border last:border-none text-sm">
+            <div className="text-xs text-text-soft">
+              {r.fecha} · {r.categoria}
+              {r.disciplinas?.nombre ? ` · ${r.disciplinas.nombre}` : ""}
+            </div>
+            <div>{r.descripcion}</div>
+          </div>
+        ))}
+        {registros.length === 0 && <p className="text-sm text-text-soft">Sin registros todavía.</p>}
+      </div>
+    </>
   );
 }
 
-// ========== CALIFICACIONES (por materia) ==========
+// ========== CALIFICACIONES (lista de estudiantes → materia → cargar notas) ==========
 function PanelCalificaciones({
   estudiantes,
   disciplinas,
@@ -472,10 +465,46 @@ function PanelCalificaciones({
   disciplinas: Disciplina[];
   grado: string;
   onAgregarMateria: (nombre: string) => Promise<void>;
-  supabase: ReturnType<typeof createClient>;
+  supabase: Supa;
 }) {
-  const [materiaId, setMateriaId] = useState("");
-  const [estudianteId, setEstudianteId] = useState("");
+  const [abiertoId, setAbiertoId] = useState<string | null>(null);
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 flex flex-col">
+      {estudiantes.map((e) => (
+        <FilaEstudiante
+          key={e.id}
+          nombre={e.nombre_completo}
+          abierto={abiertoId === e.id}
+          onToggle={() => setAbiertoId(abiertoId === e.id ? null : e.id)}
+        >
+          <FilaCalificaciones
+            estudianteId={e.id}
+            disciplinas={disciplinas}
+            grado={grado}
+            onAgregarMateria={onAgregarMateria}
+            supabase={supabase}
+          />
+        </FilaEstudiante>
+      ))}
+    </div>
+  );
+}
+
+function FilaCalificaciones({
+  estudianteId,
+  disciplinas,
+  grado,
+  onAgregarMateria,
+  supabase,
+}: {
+  estudianteId: string;
+  disciplinas: Disciplina[];
+  grado: string;
+  onAgregarMateria: (nombre: string) => Promise<void>;
+  supabase: Supa;
+}) {
+  const [materiaId, setMateriaId] = useState<string | null>(null);
   const [califs, setCalifs] = useState<CalifRow[]>([]);
   const [guardando, setGuardando] = useState(false);
 
@@ -484,226 +513,7 @@ function PanelCalificaciones({
   const [complementario, setComplementario] = useState("");
   const [regularizacion, setRegularizacion] = useState("");
 
-  useEffect(() => {
-    if (!materiaId && disciplinas.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- preseleccionar la primera materia del curso
-      setMateriaId(disciplinas[0].id);
-    }
-  }, [disciplinas, materiaId]);
-
-  const cargarCalificaciones = useCallback(async () => {
-    if (!estudianteId) {
-      setCalifs([]);
-      return;
-    }
-    const { data } = await supabase
-      .from("calificaciones")
-      .select("id, disciplina_id, instancia, nota")
-      .eq("estudiante_id", estudianteId);
+  const cargar = useCallback(async () => {
+    const { data } = await supabase.from("calificaciones").select("id, disciplina_id, instancia, nota").eq("estudiante_id", estudianteId);
     setCalifs((data as unknown as CalifRow[]) ?? []);
-  }, [estudianteId, supabase]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos desde Supabase
-    cargarCalificaciones();
-  }, [cargarCalificaciones]);
-
-  const notasPorDisciplina = useMemo(() => {
-    const mapa = new Map<string, NotasPorInstancia>();
-    califs.forEach((c) => {
-      if (c.nota === null) return;
-      const actual = mapa.get(c.disciplina_id) ?? {};
-      actual[c.instancia] = c.nota;
-      mapa.set(c.disciplina_id, actual);
-    });
-    return mapa;
-  }, [califs]);
-
-  const notas = useMemo(() => notasPorDisciplina.get(materiaId) ?? {}, [notasPorDisciplina, materiaId]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- precargar los campos con lo ya guardado al cambiar de materia
-    setEtapa1(notas.etapa1?.toString() ?? "");
-    setEtapa2(notas.etapa2?.toString() ?? "");
-    setComplementario(notas.complementario?.toString() ?? "");
-    setRegularizacion(notas.regularizacion?.toString() ?? "");
-  }, [notas]);
-
-  const resultado = evaluarMateria(notas, grado);
-
-  async function guardarEtapas(e: React.FormEvent) {
-    e.preventDefault();
-    if (!estudianteId || !materiaId) return;
-    const e1 = etapa1 ? Number(etapa1) : null;
-    const e2 = etapa2 ? Number(etapa2) : null;
-    if (e1 === null && e2 === null) return;
-
-    setGuardando(true);
-    const filas: { estudiante_id: string; disciplina_id: string; instancia: Instancia; nota: number }[] = [];
-    if (e1 !== null) filas.push({ estudiante_id: estudianteId, disciplina_id: materiaId, instancia: "etapa1", nota: e1 });
-    if (e2 !== null) filas.push({ estudiante_id: estudianteId, disciplina_id: materiaId, instancia: "etapa2", nota: e2 });
-    if (e1 !== null && e2 !== null) {
-      filas.push({
-        estudiante_id: estudianteId,
-        disciplina_id: materiaId,
-        instancia: "ordinaria",
-        nota: calcularOrdinaria(e1, e2),
-      });
-    }
-    await supabase.from("calificaciones").upsert(filas, { onConflict: "estudiante_id,disciplina_id,instancia" });
-    setGuardando(false);
-    cargarCalificaciones();
-  }
-
-  async function guardarInstanciaUnica(instancia: "complementario" | "regularizacion", valor: string) {
-    if (!estudianteId || !materiaId || !valor) return;
-    setGuardando(true);
-    await supabase.from("calificaciones").upsert(
-      { estudiante_id: estudianteId, disciplina_id: materiaId, instancia, nota: Number(valor) },
-      { onConflict: "estudiante_id,disciplina_id,instancia" }
-    );
-    setGuardando(false);
-    cargarCalificaciones();
-  }
-
-  return (
-    <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
-      <div className="grid sm:grid-cols-2 gap-3">
-        <SelectorMateria
-          disciplinas={disciplinas}
-          value={materiaId}
-          onChange={setMateriaId}
-          onAgregarMateria={onAgregarMateria}
-        />
-        <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-          Estudiante
-          <select
-            value={estudianteId}
-            onChange={(e) => setEstudianteId(e.target.value)}
-            className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
-          >
-            <option value="">Seleccionar estudiante…</option>
-            {estudiantes.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.nombre_completo}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      {estudianteId && materiaId && (
-        <div className="flex flex-col gap-4 border-t border-border pt-4">
-          <form onSubmit={guardarEtapas} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-            <label className="flex flex-col gap-1.5 text-[13px] font-medium w-full sm:w-28">
-              Etapa 1
-              <input
-                type="number" min={1} max={5} step={1}
-                value={etapa1}
-                onChange={(e) => setEtapa1(e.target.value)}
-                className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5 text-[13px] font-medium w-full sm:w-28">
-              Etapa 2
-              <input
-                type="number" min={1} max={5} step={1}
-                value={etapa2}
-                onChange={(e) => setEtapa2(e.target.value)}
-                className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card"
-              />
-            </label>
-            <button disabled={guardando} className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-5 w-full sm:w-auto">
-              {guardando ? "Guardando…" : "Guardar etapas"}
-            </button>
-          </form>
-
-          {notas.ordinaria !== undefined && (
-            <div className="text-sm">
-              Ordinaria: <span className="font-semibold">{notas.ordinaria}</span>{" "}
-              <span className={aprueba(notas.ordinaria) ? "text-success" : "text-danger"}>
-                {aprueba(notas.ordinaria) ? "— Aprobada" : "— No aprobada"}
-              </span>
-            </div>
-          )}
-
-          {notas.ordinaria !== undefined && !aprueba(notas.ordinaria) && (
-            <div className="bg-bg rounded-lg p-3 flex flex-col gap-2 sm:flex-row sm:items-end">
-              <label className="flex flex-col gap-1.5 text-[13px] font-medium w-full sm:w-28">
-                Complementario
-                <input
-                  type="number" min={1} max={5} step={1}
-                  value={complementario}
-                  onChange={(e) => setComplementario(e.target.value)}
-                  className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card"
-                />
-              </label>
-              <button
-                type="button"
-                disabled={guardando}
-                onClick={() => guardarInstanciaUnica("complementario", complementario)}
-                className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-5 w-full sm:w-auto"
-              >
-                Guardar complementario
-              </button>
-            </div>
-          )}
-
-          {notas.complementario !== undefined && !aprueba(notas.complementario) && tieneRegularizacion(grado) && (
-            <div className="bg-bg rounded-lg p-3 flex flex-col gap-2 sm:flex-row sm:items-end">
-              <label className="flex flex-col gap-1.5 text-[13px] font-medium w-full sm:w-28">
-                Regularización
-                <input
-                  type="number" min={1} max={5} step={1}
-                  value={regularizacion}
-                  onChange={(e) => setRegularizacion(e.target.value)}
-                  className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card"
-                />
-              </label>
-              <button
-                type="button"
-                disabled={guardando}
-                onClick={() => guardarInstanciaUnica("regularizacion", regularizacion)}
-                className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-5 w-full sm:w-auto"
-              >
-                Guardar regularización
-              </button>
-            </div>
-          )}
-
-          {resultado && (
-            <div
-              className={`rounded-lg px-3 py-2.5 text-sm font-semibold ${
-                resultado.aprobado ? "bg-[#E7F3EB] text-success" : "bg-[#FBEAE8] text-danger"
-              }`}
-            >
-              Nota final ({ETIQUETA_INSTANCIA[resultado.instanciaFinal]}): {resultado.notaFinal} —{" "}
-              {resultado.aprobado ? "Aprobada" : "No aprobada — repite esta materia"}
-            </div>
-          )}
-        </div>
-      )}
-
-      {estudianteId && (
-        <div className="flex flex-col border-t border-border pt-3">
-          {disciplinas.map((d) => {
-            const n = notasPorDisciplina.get(d.id) ?? {};
-            const r = evaluarMateria(n, grado);
-            return (
-              <div key={d.id} className="flex justify-between py-2 border-b border-border last:border-none text-sm">
-                <span>{d.nombre}</span>
-                <span
-                  className={
-                    r === null ? "text-text-soft" : r.aprobado ? "text-success font-semibold" : "text-danger font-semibold"
-                  }
-                >
-                  {r ? `${r.notaFinal} (${ETIQUETA_INSTANCIA[r.instanciaFinal]})` : "Sin notas"}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
+  }, [estudianteId,
