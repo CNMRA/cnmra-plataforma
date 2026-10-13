@@ -150,7 +150,7 @@ export default function LoginPage() {
             <div className="text-[13px] text-text-soft text-center">
               ¿Familia nueva?{" "}
               <a href="/registro" className="text-teal font-medium">
-                Iniciar inscripción
+                Iniciar registro
               </a>
             </div>
           </form>
