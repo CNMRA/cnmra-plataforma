@@ -79,21 +79,13 @@ export default function LoginPage() {
 
       <div className="flex-1 flex flex-col md:flex-row items-center gap-12 md:gap-16 px-6 md:px-14 py-10 md:py-14">
         <div className="flex-1 max-w-md">
-          <span className="inline-flex items-center gap-1.5 bg-red-50 text-teal rounded-full px-4 py-1.5 text-base font-bold mb-4">
-            2026–2030
+          <span className="inline-flex items-center gap-1.5 bg-red-50 text-teal rounded-full px-4 py-1.5 text-[13px] font-bold mb-4">
+            PROYECTO EDUCATIVO INSTITUCIONAL 2026–2030
           </span>
           <h1 className="font-display text-[26px] md:text-[28px] leading-snug text-navy">
             Una educación de calidad, como bien público y derecho de todos y todas.
           </h1>
-          <p className="text-sm leading-relaxed text-text-soft mt-4">
-            Nuestra visión: ser un <i>ñanderekoha</i> educativo, promoviendo el
-            bienestar, la autenticidad de cada persona y el compromiso colectivo
-            con la equidad, la justicia social y la formación integral,
-            sustentada en valores humanos, democráticos e inclusivos, donde la
-            diversidad es reconocida como una fuente de aprendizaje y de
-            transformación social.
-          </p>
-          <div className="text-xs text-text-soft/70 mt-7">
+          <div className="text-xs text-text-soft/70 mt-5">
             Barrio Corumbá Cué · Mariano Roque Alonso, Paraguay
           </div>
         </div>
