@@ -134,7 +134,16 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
       )}
 
       {estudiantes.length > 0 && tab === "asistencia" && (
-        <PanelAsistencia estudiantes={estudiantes} supabase={supabase} />
+        <div className="flex flex-col gap-3">
+          <Link
+            href={`/institucion/cursos/${cursoId}/reporte-asistencia`}
+            className="text-xs text-teal font-medium self-end"
+          >
+            Ver reporte del mes para imprimir/descargar →
+          </Link>
+          <PanelAsistencia estudiantes={estudiantes} supabase={supabase} />
+        </div>
+      )}
       )}
 
       {estudiantes.length > 0 && tab === "anecdotico" && (
