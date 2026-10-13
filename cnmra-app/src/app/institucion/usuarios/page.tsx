@@ -4,10 +4,18 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type Perfil = { id: string; nombre_completo: string; rol: string; activo: boolean };
+type Familia = {
+  id: string;
+  tutor_nombre: string;
+  tutor_telefono: string | null;
+  tutor_email: string | null;
+  estudiantes: { nombre_completo: string; estado: string }[];
+};
 
 export default function UsuariosInstitucional() {
   const supabase = createClient();
   const [perfiles, setPerfiles] = useState<Perfil[]>([]);
+  const [familias, setFamilias] = useState<Familia[]>([]);
   const [userId, setUserId] = useState("");
   const [nombre, setNombre] = useState("");
   const [rol, setRol] = useState("carga_datos");
@@ -15,12 +23,18 @@ export default function UsuariosInstitucional() {
   const [mensaje, setMensaje] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
-    const { data } = await supabase
+    const { data: perfilesData } = await supabase
       .from("perfiles")
       .select("id, nombre_completo, rol, activo")
       .in("rol", ["director", "carga_datos"])
       .order("rol");
-    setPerfiles(data ?? []);
+    setPerfiles(perfilesData ?? []);
+
+    const { data: familiasData } = await supabase
+      .from("familias")
+      .select("id, tutor_nombre, tutor_telefono, tutor_email, estudiantes(nombre_completo, estado)")
+      .order("tutor_nombre");
+    setFamilias((familiasData as unknown as Familia[]) ?? []);
   }, [supabase]);
 
   useEffect(() => {
@@ -82,7 +96,32 @@ export default function UsuariosInstitucional() {
       </div>
 
       <div className="bg-card border border-border rounded-xl p-5">
-        <h3 className="font-display text-lg mb-2">Agregar usuario</h3>
+        <div className="text-[11px] font-semibold text-text-soft tracking-wide mb-3">
+          FAMILIAS INSCRIPTAS ({familias.length})
+        </div>
+        <div className="flex flex-col">
+          {familias.map((f) => (
+            <div key={f.id} className="flex flex-col gap-1 py-3 border-b border-border last:border-none">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-medium">{f.tutor_nombre}</span>
+                <span className="text-xs text-text-soft">
+                  {f.tutor_telefono ?? "Sin teléfono"}
+                  {f.tutor_email ? ` · ${f.tutor_email}` : ""}
+                </span>
+              </div>
+              <div className="text-xs text-text-soft">
+                {f.estudiantes.length > 0
+                  ? f.estudiantes.map((e) => e.nombre_completo).join(" · ")
+                  : "Sin hijos/as cargados todavía."}
+              </div>
+            </div>
+          ))}
+          {familias.length === 0 && <p className="text-sm text-text-soft">Todavía no hay familias inscriptas.</p>}
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl p-5">
+        <h3 className="font-display text-lg mb-2">Agregar usuario institucional</h3>
         <p className="text-xs text-text-soft mb-4 leading-relaxed">
           Primero creá la cuenta en Supabase (Authentication → Add user, con su
           correo y una contraseña provisoria) y copiá el <b>User UID</b> que te da.
