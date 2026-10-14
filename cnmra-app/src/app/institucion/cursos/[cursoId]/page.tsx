@@ -146,7 +146,13 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
       )}
 
       {estudiantes.length > 0 && tab === "anecdotico" && (
-        <PanelAnecdotico estudiantes={estudiantes} disciplinas={disciplinas} onAgregarMateria={agregarMateria} supabase={supabase} />
+        <PanelAnecdotico
+          estudiantes={estudiantes}
+          disciplinas={disciplinas}
+          onAgregarMateria={agregarMateria}
+          supabase={supabase}
+          cursoId={cursoId}
+        />
       )}
 
       {estudiantes.length > 0 && tab === "calificaciones" && (
@@ -337,11 +343,13 @@ function PanelAnecdotico({
   disciplinas,
   onAgregarMateria,
   supabase,
+  cursoId,
 }: {
   estudiantes: Estudiante[];
   disciplinas: Disciplina[];
   onAgregarMateria: (nombre: string) => Promise<void>;
   supabase: Supa;
+  cursoId: string;
 }) {
   const [abiertoId, setAbiertoId] = useState<string | null>(null);
 
@@ -354,7 +362,13 @@ function PanelAnecdotico({
           abierto={abiertoId === e.id}
           onToggle={() => setAbiertoId(abiertoId === e.id ? null : e.id)}
         >
-          <FilaAnecdotico estudianteId={e.id} disciplinas={disciplinas} onAgregarMateria={onAgregarMateria} supabase={supabase} />
+          <FilaAnecdotico
+            estudianteId={e.id}
+            disciplinas={disciplinas}
+            onAgregarMateria={onAgregarMateria}
+            supabase={supabase}
+            cursoId={cursoId}
+          />
         </FilaEstudiante>
       ))}
     </div>
@@ -366,11 +380,13 @@ function FilaAnecdotico({
   disciplinas,
   onAgregarMateria,
   supabase,
+  cursoId,
 }: {
   estudianteId: string;
   disciplinas: Disciplina[];
   onAgregarMateria: (nombre: string) => Promise<void>;
   supabase: Supa;
+  cursoId: string;
 }) {
   const [materiaId, setMateriaId] = useState<string | null>(null);
   const [categoria, setCategoria] = useState("atencion");
@@ -409,6 +425,13 @@ function FilaAnecdotico({
 
   return (
     <>
+      <Link
+        href={`/institucion/cursos/${cursoId}/anecdotico/${estudianteId}`}
+        className="text-xs text-teal font-medium self-end"
+      >
+        Ver informe para imprimir →
+      </Link>
+
       <div className="flex flex-wrap gap-2">
         <ChipMateria activo={materiaId === ""} onClick={() => setMateriaId("")}>
           General
