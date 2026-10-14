@@ -3,6 +3,7 @@
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import EncabezadoDocumento from "@/components/EncabezadoDocumento";
 
 type Curso = { id: string; grado: string; turno: string; ciclo: string; enfasis: string | null };
 type Estudiante = { id: string; nombre_completo: string };
@@ -134,11 +135,18 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
       </div>
 
       <div className="bg-card border border-border rounded-xl p-5 overflow-x-auto">
+        <EncabezadoDocumento
+          titulo="REGISTRO DE ASISTENCIA"
+          datos={[
+            { label: "Curso/Grado", value: curso?.grado ?? "" },
+            { label: "Turno", value: curso ? etiquetaTurno[curso.turno] ?? curso.turno : "" },
+            { label: "Énfasis", value: curso?.enfasis ?? "—" },
+            { label: "Mes", value: nombreMes },
+          ]}
+        />
+
         <div className="mb-3">
-          <div className="font-display text-lg capitalize">
-            {curso?.grado} — Asistencia de {nombreMes}
-          </div>
-          <div className="text-xs text-text-soft mt-1">P = Presente · A = Ausente · T = Tardanza · J = Justificado</div>
+          <div className="text-xs text-text-soft">P = Presente · A = Ausente · T = Tardanza · J = Justificado</div>
         </div>
 
         <table className="text-xs border-collapse w-full">
