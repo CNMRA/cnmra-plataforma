@@ -3,6 +3,7 @@
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import EncabezadoDocumento from "@/components/EncabezadoDocumento";
 
 type Curso = { id: string; grado: string; turno: string; ciclo: string; enfasis: string | null };
 type Estudiante = { id: string; nombre_completo: string; cedula: string | null };
@@ -63,16 +64,15 @@ export default function ImprimirListaPage({ params }: { params: Promise<{ cursoI
       </div>
 
       <div className="bg-card border border-border rounded-xl p-6">
-        <div className="mb-4">
-          <div className="font-display text-xl">
-            {curso?.grado}
-            {curso?.enfasis ? ` — Énfasis en ${curso.enfasis}` : ""}
-          </div>
-          <div className="text-xs text-text-soft mt-1">
-            {curso ? `${etiquetaTurno[curso.turno] ?? curso.turno} · ${curso.ciclo}` : ""}
-          </div>
-          <div className="text-xs text-text-soft mt-1">Lista de estudiantes — {estudiantes.length} en total</div>
-        </div>
+        <EncabezadoDocumento
+          titulo="LISTA DE ESTUDIANTES"
+          datos={[
+            { label: "Curso/Grado", value: curso?.grado ?? "" },
+            { label: "Turno", value: curso ? etiquetaTurno[curso.turno] ?? curso.turno : "" },
+            { label: "Énfasis", value: curso?.enfasis ?? "—" },
+            { label: "Total", value: `${estudiantes.length} estudiantes` },
+          ]}
+        />
 
         <table className="text-sm border-collapse w-full">
           <thead>
