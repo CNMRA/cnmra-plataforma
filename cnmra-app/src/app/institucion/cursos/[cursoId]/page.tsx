@@ -179,6 +179,7 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
           grado={curso.grado}
           onAgregarMateria={agregarMateria}
           supabase={supabase}
+          cursoId={cursoId}
         />
       )}
     </div>
@@ -629,12 +630,14 @@ function PanelCalificaciones({
   grado,
   onAgregarMateria,
   supabase,
+  cursoId,
 }: {
   estudiantes: Estudiante[];
   disciplinas: Disciplina[];
   grado: string;
   onAgregarMateria: (nombre: string) => Promise<void>;
   supabase: Supa;
+  cursoId: string;
 }) {
   const [abiertoId, setAbiertoId] = useState<string | null>(null);
 
@@ -653,6 +656,7 @@ function PanelCalificaciones({
             grado={grado}
             onAgregarMateria={onAgregarMateria}
             supabase={supabase}
+            cursoId={cursoId}
           />
         </FilaEstudiante>
       ))}
@@ -666,12 +670,14 @@ function FilaCalificaciones({
   grado,
   onAgregarMateria,
   supabase,
+  cursoId,
 }: {
   estudianteId: string;
   disciplinas: Disciplina[];
   grado: string;
   onAgregarMateria: (nombre: string) => Promise<void>;
   supabase: Supa;
+  cursoId: string;
 }) {
   const [materiaId, setMateriaId] = useState<string | null>(null);
   const [califs, setCalifs] = useState<CalifRow[]>([]);
@@ -746,6 +752,13 @@ function FilaCalificaciones({
 
   return (
     <>
+      <Link
+        href={`/institucion/cursos/${cursoId}/calificaciones/${estudianteId}`}
+        className="text-xs text-teal font-medium self-end"
+      >
+        Ver libreta para imprimir →
+      </Link>
+
       <div className="flex flex-wrap gap-2">
         {disciplinas.map((d) => (
           <ChipMateria key={d.id} activo={materiaId === d.id} onClick={() => setMateriaId(d.id)}>
