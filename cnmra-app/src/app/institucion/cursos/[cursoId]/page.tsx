@@ -14,6 +14,7 @@ import {
 } from "@/lib/calificaciones";
 
 type Curso = { id: string; grado: string; turno: string; ciclo: string; enfasis: string | null };
+type Seccion = { id: string; nombre: string };
 type Estudiante = { id: string; nombre_completo: string };
 type Disciplina = { id: string; nombre: string; orden: number };
 type Registro = {
@@ -40,6 +41,7 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
   const supabase = createClient();
 
   const [curso, setCurso] = useState<Curso | null>(null);
+  const [secciones, setSecciones] = useState<Seccion[]>([]);
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -53,7 +55,8 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
       .single();
     setCurso(cursoData ?? null);
 
-    const { data: seccionesData } = await supabase.from("secciones").select("id").eq("curso_id", cursoId);
+    const { data: seccionesData } = await supabase.from("secciones").select("id, nombre").eq("curso_id", cursoId);
+    setSecciones(seccionesData ?? []);
     const seccionIds = (seccionesData ?? []).map((s) => s.id);
 
     const { data: estudiantesData } = seccionIds.length
@@ -87,6 +90,18 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
     await cargarCurso();
   }
 
+  async function agregarEstudiante(datos: { nombre: string; cedula: string | null; fechaNacimiento: string; seccionId: string }) {
+    await supabase.from("estudiantes").insert({
+      nombre_completo: datos.nombre,
+      cedula: datos.cedula,
+      fecha_nacimiento: datos.fechaNacimiento || null,
+      seccion_id: datos.seccionId,
+      familia_id: null,
+      estado: "activo",
+    });
+    await cargarCurso();
+  }
+
   if (cargando) return <p className="text-sm text-text-soft">Cargando…</p>;
 
   if (!curso) {
@@ -114,6 +129,8 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
           {etiquetaTurno[curso.turno] ?? curso.turno} · {curso.ciclo}
         </p>
       </div>
+
+      <PanelAgregarEstudiante secciones={secciones} onAgregar={agregarEstudiante} />
 
       <div className="flex gap-2 flex-wrap">
         <TabButton activo={tab === "asistencia"} onClick={() => setTab("asistencia")}>
@@ -179,6 +196,127 @@ function TabButton({ activo, onClick, children }: { activo: boolean; onClick: ()
     >
       {children}
     </button>
+  );
+}
+
+// Carga directa de un estudiante desde Dirección / Carga de datos, sin necesidad de que la familia
+// ya tenga cuenta. Queda sin familia_id hasta que alguien lo vincule más adelante.
+function PanelAgregarEstudiante({
+  secciones,
+  onAgregar,
+}: {
+  secciones: Seccion[];
+  onAgregar: (datos: { nombre: string; cedula: string | null; fechaNacimiento: string; seccionId: string }) => Promise<void>;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const [nombre, setNombre] = useState("");
+  const [cedula, setCedula] = useState("");
+  const [sinCedula, setSinCedula] = useState(false);
+  const [fechaNacimiento, setFechaNacimiento] = useState("");
+  const [seccionId, setSeccionId] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState<string | null>(null);
+
+  async function enviar(e: React.FormEvent) {
+    e.preventDefault();
+    if (!sinCedula && !cedula.trim()) {
+      setMensaje('Ingresá la cédula, o marcá "No tiene cédula todavía".');
+      return;
+    }
+    if (!seccionId) {
+      setMensaje("Seleccioná una sección.");
+      return;
+    }
+    setGuardando(true);
+    setMensaje(null);
+    await onAgregar({
+      nombre: nombre.trim(),
+      cedula: sinCedula ? null : cedula.trim(),
+      fechaNacimiento,
+      seccionId,
+    });
+    setNombre("");
+    setCedula("");
+    setSinCedula(false);
+    setFechaNacimiento("");
+    setSeccionId("");
+    setGuardando(false);
+    setMensaje("Estudiante cargado. Cuando la familia se registre con la misma cédula, se podrá vincular a su cuenta.");
+  }
+
+  if (!abierto) {
+    return (
+      <button type="button" onClick={() => setAbierto(true)} className="text-xs text-teal font-medium self-start">
+        + Agregar estudiante directamente
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={enviar} className="bg-card border border-border rounded-xl p-4 flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold">Agregar estudiante</span>
+        <button type="button" onClick={() => setAbierto(false)} className="text-xs text-text-soft">
+          Cancelar
+        </button>
+      </div>
+
+      <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+        Nombre y apellido
+        <input required value={nombre} onChange={(e) => setNombre(e.target.value)} className="h-10 rounded-lg border border-border px-3 text-sm bg-card" />
+      </label>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+          Cédula
+          <input
+            required={!sinCedula}
+            disabled={sinCedula}
+            value={cedula}
+            onChange={(e) => setCedula(e.target.value)}
+            className="h-10 rounded-lg border border-border px-3 text-sm bg-card disabled:opacity-50"
+          />
+        </label>
+        <label className="flex items-center gap-2 text-[13px] text-text-soft">
+          <input
+            type="checkbox"
+            checked={sinCedula}
+            onChange={(e) => {
+              setSinCedula(e.target.checked);
+              if (e.target.checked) setCedula("");
+            }}
+          />
+          No tiene cédula todavía
+        </label>
+      </div>
+
+      <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+        Fecha de nacimiento
+        <input type="date" value={fechaNacimiento} onChange={(e) => setFechaNacimiento(e.target.value)} className="h-10 rounded-lg border border-border px-3 text-sm bg-card" />
+      </label>
+
+      <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+        Sección
+        <select required value={seccionId} onChange={(e) => setSeccionId(e.target.value)} className="h-10 rounded-lg border border-border px-3 text-sm bg-card">
+          <option value="">Seleccionar…</option>
+          {secciones.map((s) => (
+            <option key={s.id} value={s.id}>
+              Sección {s.nombre}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {secciones.length === 0 && (
+        <p className="text-xs text-warning">Este curso todavía no tiene ninguna sección cargada.</p>
+      )}
+
+      {mensaje && <p className="text-sm text-text-soft">{mensaje}</p>}
+
+      <button disabled={guardando} className="h-10 rounded-lg bg-navy text-white font-semibold text-sm w-fit px-5">
+        {guardando ? "Guardando…" : "Agregar estudiante"}
+      </button>
+    </form>
   );
 }
 
