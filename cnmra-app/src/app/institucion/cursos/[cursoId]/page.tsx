@@ -102,6 +102,15 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
     await cargarCurso();
   }
 
+  async function eliminarEstudiante(estudianteId: string, nombre: string) {
+    const confirmado = window.confirm(
+      `¿Eliminar a ${nombre}? Se van a borrar también su asistencia, notas y registros anecdóticos. Esta acción no se puede deshacer.`
+    );
+    if (!confirmado) return;
+    await supabase.from("estudiantes").delete().eq("id", estudianteId);
+    await cargarCurso();
+  }
+
   if (cargando) return <p className="text-sm text-text-soft">Cargando…</p>;
 
   if (!curso) {
@@ -158,7 +167,7 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
           >
             Ver reporte del mes para imprimir/descargar →
           </Link>
-          <PanelAsistencia estudiantes={estudiantes} supabase={supabase} />
+          <PanelAsistencia estudiantes={estudiantes} supabase={supabase} onEliminarEstudiante={eliminarEstudiante} />
         </div>
       )}
 
@@ -167,6 +176,7 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
           estudiantes={estudiantes}
           disciplinas={disciplinas}
           onAgregarMateria={agregarMateria}
+          onEliminarEstudiante={eliminarEstudiante}
           supabase={supabase}
           cursoId={cursoId}
         />
@@ -178,6 +188,7 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
           disciplinas={disciplinas}
           grado={curso.grado}
           onAgregarMateria={agregarMateria}
+          onEliminarEstudiante={eliminarEstudiante}
           supabase={supabase}
           cursoId={cursoId}
         />
@@ -388,26 +399,52 @@ function FilaEstudiante({
   nombre,
   abierto,
   onToggle,
+  onEliminar,
   children,
 }: {
   nombre: string;
   abierto: boolean;
   onToggle: () => void;
+  onEliminar?: () => void;
   children: React.ReactNode;
 }) {
   return (
     <div className="border-b border-border last:border-none">
-      <button type="button" onClick={onToggle} className="w-full flex items-center justify-between py-3 text-sm font-medium text-left">
-        {nombre}
-        <span className="text-text-soft text-xs">{abierto ? "▲" : "▼"}</span>
-      </button>
+      <div className="w-full flex items-center justify-between gap-2 py-3">
+        <button type="button" onClick={onToggle} className="flex-1 text-left text-sm font-medium">
+          {nombre}
+        </button>
+        <div className="flex items-center gap-3 flex-none">
+          {onEliminar && (
+            <button
+              type="button"
+              onClick={onEliminar}
+              title="Eliminar estudiante"
+              className="text-text-soft hover:text-danger text-xs"
+            >
+              🗑️
+            </button>
+          )}
+          <button type="button" onClick={onToggle} className="text-text-soft text-xs">
+            {abierto ? "▲" : "▼"}
+          </button>
+        </div>
+      </div>
       {abierto && <div className="pb-4 flex flex-col gap-3">{children}</div>}
     </div>
   );
 }
 
 // ========== ASISTENCIA (general por curso, por día) ==========
-function PanelAsistencia({ estudiantes, supabase }: { estudiantes: Estudiante[]; supabase: Supa }) {
+function PanelAsistencia({
+  estudiantes,
+  supabase,
+  onEliminarEstudiante,
+}: {
+  estudiantes: Estudiante[];
+  supabase: Supa;
+  onEliminarEstudiante: (estudianteId: string, nombre: string) => Promise<void>;
+}) {
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [estados, setEstados] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
@@ -453,7 +490,7 @@ function PanelAsistencia({ estudiantes, supabase }: { estudiantes: Estudiante[];
       <div className="flex flex-col border-t border-border pt-3">
         {estudiantes.map((e) => (
           <div key={e.id} className="flex items-center justify-between gap-3 py-2 border-b border-border last:border-none">
-            <span className="text-sm">{e.nombre_completo}</span>
+            <span className="text-sm flex-1">{e.nombre_completo}</span>
             <select
               value={estados[e.id] ?? "presente"}
               onChange={(ev) => setEstados((prev) => ({ ...prev, [e.id]: ev.target.value }))}
@@ -464,6 +501,14 @@ function PanelAsistencia({ estudiantes, supabase }: { estudiantes: Estudiante[];
               <option value="tardanza">Tardanza</option>
               <option value="justificado">Justificado</option>
             </select>
+            <button
+              type="button"
+              onClick={() => onEliminarEstudiante(e.id, e.nombre_completo)}
+              title="Eliminar estudiante"
+              className="text-text-soft hover:text-danger text-xs flex-none"
+            >
+              🗑️
+            </button>
           </div>
         ))}
       </div>
@@ -481,12 +526,14 @@ function PanelAnecdotico({
   estudiantes,
   disciplinas,
   onAgregarMateria,
+  onEliminarEstudiante,
   supabase,
   cursoId,
 }: {
   estudiantes: Estudiante[];
   disciplinas: Disciplina[];
   onAgregarMateria: (nombre: string) => Promise<void>;
+  onEliminarEstudiante: (estudianteId: string, nombre: string) => Promise<void>;
   supabase: Supa;
   cursoId: string;
 }) {
@@ -500,6 +547,7 @@ function PanelAnecdotico({
           nombre={e.nombre_completo}
           abierto={abiertoId === e.id}
           onToggle={() => setAbiertoId(abiertoId === e.id ? null : e.id)}
+          onEliminar={() => onEliminarEstudiante(e.id, e.nombre_completo)}
         >
           <FilaAnecdotico
             estudianteId={e.id}
@@ -629,6 +677,7 @@ function PanelCalificaciones({
   disciplinas,
   grado,
   onAgregarMateria,
+  onEliminarEstudiante,
   supabase,
   cursoId,
 }: {
@@ -636,6 +685,7 @@ function PanelCalificaciones({
   disciplinas: Disciplina[];
   grado: string;
   onAgregarMateria: (nombre: string) => Promise<void>;
+  onEliminarEstudiante: (estudianteId: string, nombre: string) => Promise<void>;
   supabase: Supa;
   cursoId: string;
 }) {
@@ -649,6 +699,7 @@ function PanelCalificaciones({
           nombre={e.nombre_completo}
           abierto={abiertoId === e.id}
           onToggle={() => setAbiertoId(abiertoId === e.id ? null : e.id)}
+          onEliminar={() => onEliminarEstudiante(e.id, e.nombre_completo)}
         >
           <FilaCalificaciones
             estudianteId={e.id}
