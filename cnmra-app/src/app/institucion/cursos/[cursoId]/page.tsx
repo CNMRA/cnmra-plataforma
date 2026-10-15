@@ -15,7 +15,7 @@ import {
 
 type Curso = { id: string; grado: string; turno: string; ciclo: string; enfasis: string | null };
 type Seccion = { id: string; nombre: string };
-type Estudiante = { id: string; nombre_completo: string };
+type Estudiante = { id: string; nombre_completo: string; cedula: string | null };
 type Disciplina = { id: string; nombre: string; orden: number };
 type Registro = {
   id: string;
@@ -62,7 +62,7 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
     const { data: estudiantesData } = seccionIds.length
       ? await supabase
           .from("estudiantes")
-          .select("id, nombre_completo")
+          .select("id, nombre_completo, cedula")
           .in("seccion_id", seccionIds)
           .eq("estado", "activo")
           .order("nombre_completo")
@@ -102,9 +102,19 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
     await cargarCurso();
   }
 
+  async function actualizarEstudiante(estudianteId: string, nombre: string, cedula: string) {
+    const nombreLimpio = nombre.trim();
+    if (!nombreLimpio) return;
+    await supabase
+      .from("estudiantes")
+      .update({ nombre_completo: nombreLimpio, cedula: cedula.trim() || null })
+      .eq("id", estudianteId);
+    await cargarCurso();
+  }
+
   async function eliminarEstudiante(estudianteId: string, nombre: string) {
     const confirmado = window.confirm(
-      `¿Eliminar a ${nombre}? Se van a borrar también su asistencia, notas y registros anecdóticos. Esta acción no se puede deshacer.`
+      `¿Eliminar a ${nombre} de este curso?\n\nEsta acción no se puede deshacer: se borran también su asistencia, registro anecdótico y calificaciones.`
     );
     if (!confirmado) return;
     await supabase.from("estudiantes").delete().eq("id", estudianteId);
@@ -167,7 +177,12 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
           >
             Ver reporte del mes para imprimir/descargar →
           </Link>
-          <PanelAsistencia estudiantes={estudiantes} supabase={supabase} onEliminarEstudiante={eliminarEstudiante} />
+          <PanelAsistencia
+            estudiantes={estudiantes}
+            supabase={supabase}
+            onActualizarEstudiante={actualizarEstudiante}
+            onEliminarEstudiante={eliminarEstudiante}
+          />
         </div>
       )}
 
@@ -176,6 +191,7 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
           estudiantes={estudiantes}
           disciplinas={disciplinas}
           onAgregarMateria={agregarMateria}
+          onActualizarEstudiante={actualizarEstudiante}
           onEliminarEstudiante={eliminarEstudiante}
           supabase={supabase}
           cursoId={cursoId}
@@ -188,6 +204,7 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
           disciplinas={disciplinas}
           grado={curso.grado}
           onAgregarMateria={agregarMateria}
+          onActualizarEstudiante={actualizarEstudiante}
           onEliminarEstudiante={eliminarEstudiante}
           supabase={supabase}
           cursoId={cursoId}
@@ -394,41 +411,107 @@ function ChipMateria({ activo, onClick, children }: { activo: boolean; onClick: 
   );
 }
 
+// Formulario inline para editar nombre y cédula de un estudiante. Se usa tanto en la fila
+// desplegable (Anecdótico/Calificaciones) como en la lista plana de Asistencia.
+function FormularioEditarEstudiante({
+  estudiante,
+  onGuardar,
+  onCancelar,
+}: {
+  estudiante: Estudiante;
+  onGuardar: (nombre: string, cedula: string) => Promise<void>;
+  onCancelar: () => void;
+}) {
+  const [nombre, setNombre] = useState(estudiante.nombre_completo);
+  const [cedula, setCedula] = useState(estudiante.cedula ?? "");
+  const [guardando, setGuardando] = useState(false);
+
+  async function guardar() {
+    if (!nombre.trim()) return;
+    setGuardando(true);
+    await onGuardar(nombre, cedula);
+    setGuardando(false);
+  }
+
+  return (
+    <div className="flex flex-col gap-2 bg-bg rounded-lg p-3 my-1">
+      <label className="flex flex-col gap-1 text-[13px] font-medium">
+        Nombre y apellido
+        <input value={nombre} onChange={(e) => setNombre(e.target.value)} className="h-10 rounded-lg border border-border px-3 text-sm bg-card" />
+      </label>
+      <label className="flex flex-col gap-1 text-[13px] font-medium">
+        Cédula
+        <input
+          value={cedula}
+          onChange={(e) => setCedula(e.target.value)}
+          placeholder="Sin cédula"
+          className="h-10 rounded-lg border border-border px-3 text-sm bg-card"
+        />
+      </label>
+      <div className="flex gap-2">
+        <button type="button" disabled={guardando} onClick={guardar} className="h-9 px-4 rounded-lg bg-navy text-white text-xs font-semibold disabled:opacity-50">
+          {guardando ? "Guardando…" : "Guardar"}
+        </button>
+        <button type="button" onClick={onCancelar} className="h-9 px-4 rounded-lg border border-border text-xs font-semibold">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Fila de estudiante desplegable, reutilizada por Registro Anecdótico y Calificaciones.
+// Incluye los íconos de editar (✏️) y eliminar (🗑️).
 function FilaEstudiante({
-  nombre,
+  estudiante,
   abierto,
   onToggle,
+  onActualizar,
   onEliminar,
   children,
 }: {
-  nombre: string;
+  estudiante: Estudiante;
   abierto: boolean;
   onToggle: () => void;
-  onEliminar?: () => void;
+  onActualizar: (estudianteId: string, nombre: string, cedula: string) => Promise<void>;
+  onEliminar: (estudianteId: string, nombre: string) => Promise<void>;
   children: React.ReactNode;
 }) {
+  const [editando, setEditando] = useState(false);
+
+  if (editando) {
+    return (
+      <div className="border-b border-border last:border-none">
+        <FormularioEditarEstudiante
+          estudiante={estudiante}
+          onCancelar={() => setEditando(false)}
+          onGuardar={async (nombre, cedula) => {
+            await onActualizar(estudiante.id, nombre, cedula);
+            setEditando(false);
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="border-b border-border last:border-none">
-      <div className="w-full flex items-center justify-between gap-2 py-3">
-        <button type="button" onClick={onToggle} className="flex-1 text-left text-sm font-medium">
-          {nombre}
+      <div className="flex items-center justify-between gap-1 py-1">
+        <button type="button" onClick={onToggle} className="flex-1 flex items-center justify-between py-2 text-sm font-medium text-left">
+          {estudiante.nombre_completo}
+          <span className="text-text-soft text-xs">{abierto ? "▲" : "▼"}</span>
         </button>
-        <div className="flex items-center gap-3 flex-none">
-          {onEliminar && (
-            <button
-              type="button"
-              onClick={onEliminar}
-              title="Eliminar estudiante"
-              className="text-text-soft hover:text-danger text-xs"
-            >
-              🗑️
-            </button>
-          )}
-          <button type="button" onClick={onToggle} className="text-text-soft text-xs">
-            {abierto ? "▲" : "▼"}
-          </button>
-        </div>
+        <button type="button" onClick={() => setEditando(true)} title="Editar nombre o cédula" className="text-base px-1.5 py-1 shrink-0">
+          ✏️
+        </button>
+        <button
+          type="button"
+          onClick={() => onEliminar(estudiante.id, estudiante.nombre_completo)}
+          title="Eliminar estudiante"
+          className="text-base px-1.5 py-1 shrink-0"
+        >
+          🗑️
+        </button>
       </div>
       {abierto && <div className="pb-4 flex flex-col gap-3">{children}</div>}
     </div>
@@ -439,16 +522,19 @@ function FilaEstudiante({
 function PanelAsistencia({
   estudiantes,
   supabase,
+  onActualizarEstudiante,
   onEliminarEstudiante,
 }: {
   estudiantes: Estudiante[];
   supabase: Supa;
+  onActualizarEstudiante: (estudianteId: string, nombre: string, cedula: string) => Promise<void>;
   onEliminarEstudiante: (estudianteId: string, nombre: string) => Promise<void>;
 }) {
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [estados, setEstados] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     const { data } = await supabase
@@ -488,29 +574,44 @@ function PanelAsistencia({
       </label>
 
       <div className="flex flex-col border-t border-border pt-3">
-        {estudiantes.map((e) => (
-          <div key={e.id} className="flex items-center justify-between gap-3 py-2 border-b border-border last:border-none">
-            <span className="text-sm flex-1">{e.nombre_completo}</span>
-            <select
-              value={estados[e.id] ?? "presente"}
-              onChange={(ev) => setEstados((prev) => ({ ...prev, [e.id]: ev.target.value }))}
-              className="h-9 rounded-md border border-border px-2.5 text-sm bg-card"
-            >
-              <option value="presente">Presente</option>
-              <option value="ausente">Ausente</option>
-              <option value="tardanza">Tardanza</option>
-              <option value="justificado">Justificado</option>
-            </select>
-            <button
-              type="button"
-              onClick={() => onEliminarEstudiante(e.id, e.nombre_completo)}
-              title="Eliminar estudiante"
-              className="text-text-soft hover:text-danger text-xs flex-none"
-            >
-              🗑️
-            </button>
-          </div>
-        ))}
+        {estudiantes.map((e) =>
+          editandoId === e.id ? (
+            <FormularioEditarEstudiante
+              key={e.id}
+              estudiante={e}
+              onCancelar={() => setEditandoId(null)}
+              onGuardar={async (nombre, cedula) => {
+                await onActualizarEstudiante(e.id, nombre, cedula);
+                setEditandoId(null);
+              }}
+            />
+          ) : (
+            <div key={e.id} className="flex items-center justify-between gap-3 py-2 border-b border-border last:border-none">
+              <span className="text-sm flex-1">{e.nombre_completo}</span>
+              <select
+                value={estados[e.id] ?? "presente"}
+                onChange={(ev) => setEstados((prev) => ({ ...prev, [e.id]: ev.target.value }))}
+                className="h-9 rounded-md border border-border px-2.5 text-sm bg-card"
+              >
+                <option value="presente">Presente</option>
+                <option value="ausente">Ausente</option>
+                <option value="tardanza">Tardanza</option>
+                <option value="justificado">Justificado</option>
+              </select>
+              <button type="button" onClick={() => setEditandoId(e.id)} title="Editar nombre o cédula" className="text-base px-1 shrink-0">
+                ✏️
+              </button>
+              <button
+                type="button"
+                onClick={() => onEliminarEstudiante(e.id, e.nombre_completo)}
+                title="Eliminar estudiante"
+                className="text-base px-1 shrink-0"
+              >
+                🗑️
+              </button>
+            </div>
+          )
+        )}
       </div>
 
       <button onClick={guardar} disabled={guardando} className="h-11 rounded-lg bg-navy text-white font-semibold text-sm w-full sm:w-fit px-6">
@@ -526,6 +627,7 @@ function PanelAnecdotico({
   estudiantes,
   disciplinas,
   onAgregarMateria,
+  onActualizarEstudiante,
   onEliminarEstudiante,
   supabase,
   cursoId,
@@ -533,6 +635,7 @@ function PanelAnecdotico({
   estudiantes: Estudiante[];
   disciplinas: Disciplina[];
   onAgregarMateria: (nombre: string) => Promise<void>;
+  onActualizarEstudiante: (estudianteId: string, nombre: string, cedula: string) => Promise<void>;
   onEliminarEstudiante: (estudianteId: string, nombre: string) => Promise<void>;
   supabase: Supa;
   cursoId: string;
@@ -544,10 +647,11 @@ function PanelAnecdotico({
       {estudiantes.map((e) => (
         <FilaEstudiante
           key={e.id}
-          nombre={e.nombre_completo}
+          estudiante={e}
           abierto={abiertoId === e.id}
           onToggle={() => setAbiertoId(abiertoId === e.id ? null : e.id)}
-          onEliminar={() => onEliminarEstudiante(e.id, e.nombre_completo)}
+          onActualizar={onActualizarEstudiante}
+          onEliminar={onEliminarEstudiante}
         >
           <FilaAnecdotico
             estudianteId={e.id}
@@ -677,6 +781,7 @@ function PanelCalificaciones({
   disciplinas,
   grado,
   onAgregarMateria,
+  onActualizarEstudiante,
   onEliminarEstudiante,
   supabase,
   cursoId,
@@ -685,6 +790,7 @@ function PanelCalificaciones({
   disciplinas: Disciplina[];
   grado: string;
   onAgregarMateria: (nombre: string) => Promise<void>;
+  onActualizarEstudiante: (estudianteId: string, nombre: string, cedula: string) => Promise<void>;
   onEliminarEstudiante: (estudianteId: string, nombre: string) => Promise<void>;
   supabase: Supa;
   cursoId: string;
@@ -696,10 +802,11 @@ function PanelCalificaciones({
       {estudiantes.map((e) => (
         <FilaEstudiante
           key={e.id}
-          nombre={e.nombre_completo}
+          estudiante={e}
           abierto={abiertoId === e.id}
           onToggle={() => setAbiertoId(abiertoId === e.id ? null : e.id)}
-          onEliminar={() => onEliminarEstudiante(e.id, e.nombre_completo)}
+          onActualizar={onActualizarEstudiante}
+          onEliminar={onEliminarEstudiante}
         >
           <FilaCalificaciones
             estudianteId={e.id}
