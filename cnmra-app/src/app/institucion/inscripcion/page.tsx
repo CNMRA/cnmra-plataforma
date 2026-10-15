@@ -11,9 +11,13 @@ type InscripcionFila = {
   creado_en: string;
   estudiante_id: string;
   curso_solicitado_id: string | null;
+  anio_lectivo: number | null;
   estudiantes: { nombre_completo: string } | null;
   cursos: { id: string; grado: string; turno: string } | null;
 };
+
+const ANIO_ACTUAL = new Date().getFullYear();
+const ANIOS_LECTIVOS = [ANIO_ACTUAL - 1, ANIO_ACTUAL, ANIO_ACTUAL + 1, ANIO_ACTUAL + 2, ANIO_ACTUAL + 3];
 
 export default function InscripcionInstitucional() {
   const supabase = createClient();
@@ -31,6 +35,7 @@ export default function InscripcionInstitucional() {
   const [estudianteNombre, setEstudianteNombre] = useState("");
   const [fechaNacimiento, setFechaNacimiento] = useState("");
   const [cursoId, setCursoId] = useState("");
+  const [anioLectivo, setAnioLectivo] = useState(String(ANIO_ACTUAL));
 
   const [seccionSeleccionada, setSeccionSeleccionada] = useState<Record<string, string>>({});
   const [nuevaSeccionNombre, setNuevaSeccionNombre] = useState<Record<string, string>>({});
@@ -46,7 +51,7 @@ export default function InscripcionInstitucional() {
 
     const { data: inscripcionesData } = await supabase
       .from("inscripciones")
-      .select("id, estado, creado_en, estudiante_id, curso_solicitado_id, estudiantes(nombre_completo), cursos(id, grado, turno)")
+      .select("id, estado, creado_en, estudiante_id, curso_solicitado_id, anio_lectivo, estudiantes(nombre_completo), cursos(id, grado, turno)")
       .order("creado_en", { ascending: false })
       .limit(15);
     setPendientes((inscripcionesData as unknown as InscripcionFila[]) ?? []);
@@ -112,6 +117,7 @@ export default function InscripcionInstitucional() {
     const { error: errorInscripcion } = await supabase.from("inscripciones").insert({
       estudiante_id: estudiante.id,
       curso_solicitado_id: cursoId || null,
+      anio_lectivo: Number(anioLectivo),
       estado: "pendiente",
     });
 
@@ -129,6 +135,7 @@ export default function InscripcionInstitucional() {
     setEstudianteNombre("");
     setFechaNacimiento("");
     setCursoId("");
+    setAnioLectivo(String(ANIO_ACTUAL));
     setGuardando(false);
     cargar();
   }
@@ -206,6 +213,22 @@ export default function InscripcionInstitucional() {
         <Campo label="Nombre completo del estudiante" value={estudianteNombre} onChange={setEstudianteNombre} required />
         <Campo label="Fecha de nacimiento" value={fechaNacimiento} onChange={setFechaNacimiento} type="date" />
 
+        <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+          Año lectivo
+          <select
+            required
+            value={anioLectivo}
+            onChange={(e) => setAnioLectivo(e.target.value)}
+            className="h-11 w-full rounded-lg border border-border px-3 text-sm bg-card"
+          >
+            {ANIOS_LECTIVOS.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <label className="flex flex-col gap-1.5 text-[13px] font-medium md:col-span-2">
           Curso al que postula
           <select
@@ -248,6 +271,7 @@ export default function InscripcionInstitucional() {
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                   <span>
                     {p.estudiantes?.nombre_completo ?? "—"} — {p.cursos ? `${p.cursos.grado} (${p.cursos.turno})` : "sin curso"}
+                    {p.anio_lectivo ? ` · Año ${p.anio_lectivo}` : ""}
                   </span>
                   <span
                     className={`text-xs font-semibold px-2 py-1 rounded-full ${
