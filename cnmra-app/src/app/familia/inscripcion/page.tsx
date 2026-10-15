@@ -24,7 +24,7 @@ export default function InscripcionFamilia() {
     e.preventDefault();
 
     if (!sinCedula && !cedula.trim()) {
-      setMensaje("Ingresá el número de cédula, o marcá \"No tiene cédula todavía\".");
+      setMensaje('Ingresá el número de cédula, o marcá "No tiene cédula todavía".');
       return;
     }
 
@@ -53,6 +53,25 @@ export default function InscripcionFamilia() {
       familia = nuevaFamilia;
     }
 
+    // Revisa si este hijo/a ya fue inscripto antes por la misma familia (por cédula o por nombre).
+    const { data: existentes } = await supabase
+      .from("estudiantes")
+      .select("nombre_completo, cedula")
+      .eq("familia_id", familia.id);
+
+    const yaExiste = (existentes ?? []).some((ex) => {
+      if (!sinCedula && cedula.trim() && ex.cedula) {
+        return ex.cedula.trim().toLowerCase() === cedula.trim().toLowerCase();
+      }
+      return ex.nombre_completo.trim().toLowerCase() === nombre.trim().toLowerCase();
+    });
+
+    if (yaExiste) {
+      setMensaje("Ya inscribiste a un hijo/a con estos datos. Si es un error, comunicate con la institución.");
+      setGuardando(false);
+      return;
+    }
+
     const { data: estudiante, error: errorEstudiante } = await supabase
       .from("estudiantes")
       .insert({
@@ -65,7 +84,12 @@ export default function InscripcionFamilia() {
       .single();
 
     if (errorEstudiante || !estudiante) {
-      setMensaje("No se pudo registrar: " + errorEstudiante?.message);
+      const duplicado = errorEstudiante?.code === "23505";
+      setMensaje(
+        duplicado
+          ? "Ya inscribiste a un hijo/a con esta cédula."
+          : "No se pudo registrar: " + errorEstudiante?.message
+      );
       setGuardando(false);
       return;
     }
