@@ -59,16 +59,17 @@ export default async function FamiliaInicio() {
         {(estudiantes ?? []).map((e) => {
           const seccion = e.secciones as unknown as { nombre: string; cursos: { grado: string; turno: string } | null } | null;
           return (
-            <Link
-              key={e.id}
-              href="/familia/seguimiento"
-              className="bg-card border border-border rounded-xl p-4 flex flex-col gap-2 hover:border-teal"
-            >
-              <div className="font-semibold">{e.nombre_completo}</div>
-              <div className="text-xs text-text-soft">
-                {seccion?.cursos ? `${seccion.cursos.grado} "${seccion.nombre}" · Turno ${seccion.cursos.turno}` : "Curso sin asignar todavía"}
-              </div>
-            </Link>
+            <div key={e.id} className="bg-card border border-border rounded-xl p-4 flex flex-col gap-2">
+              <Link href="/familia/seguimiento" className="flex flex-col gap-2 hover:opacity-80">
+                <div className="font-semibold">{e.nombre_completo}</div>
+                <div className="text-xs text-text-soft">
+                  {seccion?.cursos ? `${seccion.cursos.grado} "${seccion.nombre}" · Turno ${seccion.cursos.turno}` : "Curso sin asignar todavía"}
+                </div>
+              </Link>
+              <Link href={`/familia/estudiante/${e.id}/editar`} className="text-xs text-teal font-medium self-start">
+                Editar datos →
+              </Link>
+            </div>
           );
         })}
       </div>
