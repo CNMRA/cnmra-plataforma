@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type Curso = { id: string; grado: string; turno: string; enfasis: string | null };
+type Candidato = { estudianteId: string; nombre: string };
+
+const ANIO_ACTUAL = new Date().getFullYear();
+const ANIOS_LECTIVOS = [ANIO_ACTUAL, ANIO_ACTUAL + 1, ANIO_ACTUAL + 2];
 
 export default function InscripcionFamilia() {
   const supabase = createClient();
@@ -13,12 +17,33 @@ export default function InscripcionFamilia() {
   const [sinCedula, setSinCedula] = useState(false);
   const [fechaNacimiento, setFechaNacimiento] = useState("");
   const [cursoId, setCursoId] = useState("");
+  const [anioLectivo, setAnioLectivo] = useState(String(ANIO_ACTUAL));
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const [candidato, setCandidato] = useState<Candidato | null>(null);
+  const [vinculando, setVinculando] = useState(false);
 
   useEffect(() => {
     supabase.from("cursos").select("id, grado, turno, enfasis").order("orden").then(({ data }) => setCursos(data ?? []));
   }, [supabase]);
+
+  async function obtenerOCrearMiFamilia(userId: string, email: string | undefined) {
+    let { data: familia } = await supabase.from("familias").select("id").eq("tutor_perfil_id", userId).maybeSingle();
+
+    if (!familia) {
+      const { data: perfil } = await supabase.from("perfiles").select("nombre_completo").eq("id", userId).single();
+      const { data: nuevaFamilia, error } = await supabase
+        .from("familias")
+        .insert({ tutor_perfil_id: userId, tutor_nombre: perfil?.nombre_completo ?? "", tutor_cedula: userId, tutor_email: email })
+        .select("id")
+        .single();
+      if (error || !nuevaFamilia) {
+        return { familia: null, error };
+      }
+      familia = nuevaFamilia;
+    }
+    return { familia, error: null };
+  }
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
@@ -30,27 +55,41 @@ export default function InscripcionFamilia() {
 
     setGuardando(true);
     setMensaje(null);
+    setCandidato(null);
 
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    let { data: familia } = await supabase.from("familias").select("id").eq("tutor_perfil_id", user.id).maybeSingle();
+    // Buscar si la institución ya cargó a este estudiante (por cédula o por nombre
+    // exacto) pero todavía ninguna familia lo "reclamó" desde su cuenta — para no
+    // crear un duplicado y, en cambio, ofrecer vincularlo directamente.
+    const cedulaLimpia = sinCedula ? "" : cedula.trim();
+    const nombreLimpio = nombre.trim();
 
+    let busqueda = supabase
+      .from("estudiantes")
+      .select("id, nombre_completo, familia_id, familias(tutor_perfil_id)");
+    busqueda = cedulaLimpia ? busqueda.ilike("cedula", cedulaLimpia) : busqueda.ilike("nombre_completo", nombreLimpio);
+
+    const { data: posibles } = await busqueda;
+    const encontrado = (posibles ?? []).find((est) => {
+      const fam = est.familias as unknown as { tutor_perfil_id: string | null } | null;
+      return fam && !fam.tutor_perfil_id;
+    });
+
+    if (encontrado) {
+      setCandidato({ estudianteId: encontrado.id, nombre: encontrado.nombre_completo });
+      setGuardando(false);
+      return;
+    }
+
+    const { familia, error: errorFamilia } = await obtenerOCrearMiFamilia(user.id, user.email);
     if (!familia) {
-      const { data: perfil } = await supabase.from("perfiles").select("nombre_completo").eq("id", user.id).single();
-      const { data: nuevaFamilia, error } = await supabase
-        .from("familias")
-        .insert({ tutor_perfil_id: user.id, tutor_nombre: perfil?.nombre_completo ?? "", tutor_cedula: user.id, tutor_email: user.email })
-        .select("id")
-        .single();
-      if (error || !nuevaFamilia) {
-        setMensaje("No se pudo crear tu familia: " + error?.message);
-        setGuardando(false);
-        return;
-      }
-      familia = nuevaFamilia;
+      setMensaje("No se pudo crear tu familia: " + errorFamilia?.message);
+      setGuardando(false);
+      return;
     }
 
     // Evitar que un mismo responsable inscriba dos veces al mismo hijo/a:
@@ -60,11 +99,11 @@ export default function InscripcionFamilia() {
       .select("id, nombre_completo, cedula")
       .eq("familia_id", familia.id);
 
-    const cedulaLimpia = sinCedula ? "" : cedula.trim().toLowerCase();
-    const nombreLimpio = nombre.trim().toLowerCase();
+    const cedulaLimpiaMin = cedulaLimpia.toLowerCase();
+    const nombreLimpioMin = nombreLimpio.toLowerCase();
     const yaExiste = (existentes ?? []).some((est) => {
-      if (cedulaLimpia) return (est.cedula ?? "").trim().toLowerCase() === cedulaLimpia;
-      return est.nombre_completo.trim().toLowerCase() === nombreLimpio;
+      if (cedulaLimpiaMin) return (est.cedula ?? "").trim().toLowerCase() === cedulaLimpiaMin;
+      return est.nombre_completo.trim().toLowerCase() === nombreLimpioMin;
     });
 
     if (yaExiste) {
@@ -94,7 +133,12 @@ export default function InscripcionFamilia() {
       return;
     }
 
-    await supabase.from("inscripciones").insert({ estudiante_id: estudiante.id, curso_solicitado_id: cursoId || null, estado: "pendiente" });
+    await supabase.from("inscripciones").insert({
+      estudiante_id: estudiante.id,
+      curso_solicitado_id: cursoId || null,
+      anio_lectivo: Number(anioLectivo),
+      estado: "pendiente",
+    });
 
     setMensaje("Inscripción enviada. La institución la va a revisar.");
     setNombre("");
@@ -102,7 +146,54 @@ export default function InscripcionFamilia() {
     setSinCedula(false);
     setFechaNacimiento("");
     setCursoId("");
+    setAnioLectivo(String(ANIO_ACTUAL));
     setGuardando(false);
+  }
+
+  async function confirmarVinculacion() {
+    if (!candidato) return;
+    setVinculando(true);
+    setMensaje(null);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setVinculando(false);
+      return;
+    }
+
+    const { familia, error: errorFamilia } = await obtenerOCrearMiFamilia(user.id, user.email);
+    if (!familia) {
+      setMensaje("No se pudo vincular: " + errorFamilia?.message);
+      setVinculando(false);
+      return;
+    }
+
+    const { error } = await supabase.from("estudiantes").update({ familia_id: familia.id }).eq("id", candidato.estudianteId);
+
+    setVinculando(false);
+
+    if (error) {
+      setMensaje("No se pudo vincular: " + error.message);
+      return;
+    }
+
+    setMensaje(`${candidato.nombre} fue vinculado/a a tu cuenta. Ya lo/la vas a ver en Inicio.`);
+    setCandidato(null);
+    setNombre("");
+    setCedula("");
+    setSinCedula(false);
+    setFechaNacimiento("");
+    setCursoId("");
+    setAnioLectivo(String(ANIO_ACTUAL));
+  }
+
+  function noEsElMismo() {
+    setCandidato(null);
+    setMensaje(
+      "Entendido, no era ese estudiante. Revisá que el nombre y la cédula estén bien escritos y volvé a enviar la inscripción."
+    );
   }
 
   return (
@@ -147,6 +238,21 @@ export default function InscripcionFamilia() {
           <input type="date" value={fechaNacimiento} onChange={(e) => setFechaNacimiento(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
         </label>
         <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+          Año lectivo
+          <select
+            required
+            value={anioLectivo}
+            onChange={(e) => setAnioLectivo(e.target.value)}
+            className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
+          >
+            {ANIOS_LECTIVOS.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1.5 text-[13px] font-medium">
           Curso al que postula
           <select value={cursoId} onChange={(e) => setCursoId(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card">
             <option value="">Seleccionar…</option>
@@ -157,6 +263,34 @@ export default function InscripcionFamilia() {
             ))}
           </select>
         </label>
+
+        {candidato && (
+          <div className="bg-bg border border-border rounded-lg p-4 flex flex-col gap-3">
+            <p className="text-sm">
+              Encontramos un estudiante ya cargado que coincide: <strong>{candidato.nombre}</strong>. ¿Es a quien
+              querés inscribir?
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                disabled={vinculando}
+                onClick={confirmarVinculacion}
+                className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-4 disabled:opacity-50"
+              >
+                {vinculando ? "Vinculando…" : "Sí, es mi hijo/a"}
+              </button>
+              <button
+                type="button"
+                disabled={vinculando}
+                onClick={noEsElMismo}
+                className="h-10 rounded-lg border border-border font-semibold text-sm px-4 disabled:opacity-50"
+              >
+                No, es otro/a
+              </button>
+            </div>
+          </div>
+        )}
+
         {mensaje && <div className="text-sm text-text-soft bg-bg rounded-lg px-3 py-2">{mensaje}</div>}
         <button disabled={guardando} className="h-11 rounded-lg bg-navy text-white font-semibold text-sm w-fit px-6">
           {guardando ? "Enviando…" : "Enviar inscripción"}
