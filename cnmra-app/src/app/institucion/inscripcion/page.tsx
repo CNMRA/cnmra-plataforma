@@ -150,8 +150,9 @@ export default function InscripcionInstitucional() {
     cargar();
   }
 
-  // Borra el estudiante y su inscripción rechazada por completo, para que la familia
-  // pueda volver a inscribirlo sin que la cédula figure como "ya usada".
+  // Borra el estudiante y su inscripción por completo (sirve tanto para rechazadas
+  // como para pendientes incompletas), para que la familia pueda volver a inscribirlo
+  // sin que la cédula figure como "ya usada".
   async function eliminarInscripcionRechazada(fila: InscripcionFila) {
     const confirmado = window.confirm(
       `¿Eliminar definitivamente a ${fila.estudiantes?.nombre_completo ?? "este estudiante"}?\n\nEsto borra el registro completo (no solo la inscripción), para que la familia pueda volver a inscribirlo si corresponde.`
@@ -280,10 +281,21 @@ export default function InscripcionInstitucional() {
                 {p.estado === "pendiente" && (
                   <div className="bg-bg rounded-lg p-3 flex flex-col gap-2.5">
                     {!curso ? (
-                      <p className="text-xs text-text-soft">
-                        No tiene un curso solicitado válido — pedile a la familia que
-                        vuelva a inscribirse eligiendo un curso.
-                      </p>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs text-text-soft">
+                          No tiene un curso solicitado válido — pedile a la familia que
+                          vuelva a inscribirse eligiendo un curso, y mientras tanto eliminá
+                          este registro incompleto.
+                        </p>
+                        <button
+                          type="button"
+                          disabled={procesando === p.id}
+                          onClick={() => eliminarInscripcionRechazada(p)}
+                          className="h-9 rounded-lg border border-border text-danger font-semibold text-xs px-4 w-full sm:w-auto disabled:opacity-50 shrink-0"
+                        >
+                          🗑️ Eliminar estudiante e inscripción
+                        </button>
+                      </div>
                     ) : (
                       <>
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
