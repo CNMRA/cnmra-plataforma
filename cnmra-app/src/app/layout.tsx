@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Work_Sans } from "next/font/google";
 import "./globals.css";
+import RegistrarServiceWorker from "@/components/RegistrarServiceWorker";
 
 const fraunces = Fraunces({
   variable: "--font-fraunces",
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${fraunces.variable} ${workSans.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans bg-bg text-text">
+        <RegistrarServiceWorker />
         {children}
       </body>
     </html>
