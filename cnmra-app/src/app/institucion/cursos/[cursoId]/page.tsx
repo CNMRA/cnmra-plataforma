@@ -30,6 +30,23 @@ type CalifRow = { id: string; disciplina_id: string; instancia: Instancia; nota:
 type Tab = "asistencia" | "anecdotico" | "calificaciones";
 type Supa = ReturnType<typeof createClient>;
 
+type SituacionAnecdotica = {
+  valor: string;
+  etiqueta: string;
+  categoria: "positivo" | "atencion" | "conducta";
+  requiereDetalle: boolean;
+};
+
+const SITUACIONES_ANECDOTICO: SituacionAnecdotica[] = [
+  { valor: "sin_uniforme_diario", etiqueta: "Sin uniforme diario", categoria: "atencion", requiereDetalle: false },
+  { valor: "uniforme_incompleto", etiqueta: "Con uniforme incompleto", categoria: "atencion", requiereDetalle: false },
+  { valor: "sin_uniforme_gala", etiqueta: "Sin uniforme de gala", categoria: "atencion", requiereDetalle: false },
+  { valor: "no_entrega_tarea", etiqueta: "No entrega tarea", categoria: "atencion", requiereDetalle: false },
+  { valor: "inconducta", etiqueta: "Situación de inconducta o indisciplina", categoria: "conducta", requiereDetalle: true },
+  { valor: "buena_conducta", etiqueta: "Buena conducta", categoria: "positivo", requiereDetalle: false },
+  { valor: "otra_pedagogica", etiqueta: "Otra situación pedagógica", categoria: "atencion", requiereDetalle: true },
+];
+
 const etiquetaTurno: Record<string, string> = {
   mañana: "Turno mañana",
   tarde: "Turno tarde",
@@ -681,9 +698,23 @@ function FilaAnecdotico({
 }) {
   const [materiaId, setMateriaId] = useState<string | null>(null);
   const [categoria, setCategoria] = useState("atencion");
+  const [situacion, setSituacion] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [registros, setRegistros] = useState<Registro[]>([]);
   const [guardando, setGuardando] = useState(false);
+
+  function elegirSituacion(valor: string) {
+    setSituacion(valor);
+    const s = SITUACIONES_ANECDOTICO.find((x) => x.valor === valor);
+    if (!s) {
+      setDescripcion("");
+      return;
+    }
+    setCategoria(s.categoria);
+    // Las situaciones que piden "especificar" dejan el texto listo para que
+    // el usuario agregue el detalle después de los dos puntos.
+    setDescripcion(s.requiereDetalle ? `${s.etiqueta}: ` : s.etiqueta);
+  }
 
   const cargar = useCallback(async () => {
     const { data } = await supabase
@@ -710,6 +741,7 @@ function FilaAnecdotico({
       disciplina_id: materiaId || null,
     });
     setDescripcion("");
+    setSituacion("");
     setGuardando(false);
     cargar();
   }
@@ -738,6 +770,18 @@ function FilaAnecdotico({
       {materiaId !== null && (
         <form onSubmit={agregar} className="flex flex-col gap-3 bg-bg rounded-lg p-3">
           <select
+            value={situacion}
+            onChange={(e) => elegirSituacion(e.target.value)}
+            className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card sm:w-fit"
+          >
+            <option value="">Escribir libremente…</option>
+            {SITUACIONES_ANECDOTICO.map((s) => (
+              <option key={s.valor} value={s.valor}>
+                {s.etiqueta}
+              </option>
+            ))}
+          </select>
+          <select
             value={categoria}
             onChange={(e) => setCategoria(e.target.value)}
             className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card sm:w-fit"
@@ -749,7 +793,7 @@ function FilaAnecdotico({
           <textarea
             value={descripcion}
             onChange={(e) => setDescripcion(e.target.value)}
-            placeholder="Descripción del registro…"
+            placeholder="Descripción del registro… (si elegiste una situación arriba, acá podés agregar el detalle)"
             className="rounded-lg border border-border px-3 py-2 text-sm bg-card min-h-20 w-full"
             required
           />
