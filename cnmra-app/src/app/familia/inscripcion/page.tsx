@@ -64,20 +64,18 @@ export default function InscripcionFamilia() {
 
     // Buscar si la institución ya cargó a este estudiante (por cédula o por nombre
     // exacto) pero todavía ninguna familia lo "reclamó" desde su cuenta — para no
-    // crear un duplicado y, en cambio, ofrecer vincularlo directamente.
+    // crear un duplicado y, en cambio, ofrecer vincularlo directamente. Esto usa una
+    // función especial en la base de datos (no una consulta directa a "estudiantes"),
+    // porque una familia normal no tiene permiso para ver estudiantes de otras
+    // familias, y esa función es la única forma segura de encontrar la coincidencia.
     const cedulaLimpia = sinCedula ? "" : cedula.trim();
     const nombreLimpio = nombre.trim();
 
-    let busqueda = supabase
-      .from("estudiantes")
-      .select("id, nombre_completo, familia_id, familias(tutor_perfil_id)");
-    busqueda = cedulaLimpia ? busqueda.ilike("cedula", cedulaLimpia) : busqueda.ilike("nombre_completo", nombreLimpio);
-
-    const { data: posibles } = await busqueda;
-    const encontrado = (posibles ?? []).find((est) => {
-      const fam = est.familias as unknown as { tutor_perfil_id: string | null } | null;
-      return fam && !fam.tutor_perfil_id;
+    const { data: coincidencias } = await supabase.rpc("buscar_estudiante_no_reclamado", {
+      p_cedula: cedulaLimpia || null,
+      p_nombre: cedulaLimpia ? null : nombreLimpio,
     });
+    const encontrado = coincidencias && coincidencias.length > 0 ? coincidencias[0] : null;
 
     if (encontrado) {
       setCandidato({ estudianteId: encontrado.id, nombre: encontrado.nombre_completo });
