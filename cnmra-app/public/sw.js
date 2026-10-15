@@ -9,6 +9,13 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+// Chrome necesita que el service worker "conteste" los pedidos de red
+// (aunque sea dejándolos pasar normal) para considerar que la plataforma
+// se puede instalar como app.
+self.addEventListener("fetch", (event) => {
+  event.respondWith(fetch(event.request));
+});
+
 self.addEventListener("push", (event) => {
   let datos = { titulo: "CNMRA", mensaje: "Tenés una novedad nueva en la plataforma.", url: "/familia" };
   try {
