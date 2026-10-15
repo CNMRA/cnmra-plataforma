@@ -19,6 +19,23 @@ type Registro = {
 };
 type Asistencia = { id: string; fecha: string; estado: string };
 
+type Situacion = {
+  valor: string;
+  etiqueta: string;
+  categoria: "positivo" | "atencion" | "conducta";
+  requiereDetalle: boolean;
+};
+
+const SITUACIONES: Situacion[] = [
+  { valor: "sin_uniforme_diario", etiqueta: "Sin uniforme diario", categoria: "atencion", requiereDetalle: false },
+  { valor: "uniforme_incompleto", etiqueta: "Con uniforme incompleto", categoria: "atencion", requiereDetalle: false },
+  { valor: "sin_uniforme_gala", etiqueta: "Sin uniforme de gala", categoria: "atencion", requiereDetalle: false },
+  { valor: "no_entrega_tarea", etiqueta: "No entrega tarea", categoria: "atencion", requiereDetalle: false },
+  { valor: "inconducta", etiqueta: "Situación de inconducta o indisciplina", categoria: "conducta", requiereDetalle: true },
+  { valor: "buena_conducta", etiqueta: "Buena conducta", categoria: "positivo", requiereDetalle: false },
+  { valor: "otra_pedagogica", etiqueta: "Otra situación pedagógica", categoria: "atencion", requiereDetalle: true },
+];
+
 export default function SeguimientoInstitucional() {
   const supabase = createClient();
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
@@ -30,6 +47,7 @@ export default function SeguimientoInstitucional() {
 
   const [descripcion, setDescripcion] = useState("");
   const [categoria, setCategoria] = useState("atencion");
+  const [situacion, setSituacion] = useState("");
   const [disciplinaId, setDisciplinaId] = useState("");
   const [estadoAsistencia, setEstadoAsistencia] = useState("presente");
   const [guardando, setGuardando] = useState(false);
@@ -85,7 +103,22 @@ export default function SeguimientoInstitucional() {
     cargarDetalle();
     setFiltroDisciplina("");
     setDisciplinaId("");
+    setSituacion("");
+    setDescripcion("");
   }, [cargarDetalle]);
+
+  function elegirSituacion(valor: string) {
+    setSituacion(valor);
+    const s = SITUACIONES.find((x) => x.valor === valor);
+    if (!s) {
+      setDescripcion("");
+      return;
+    }
+    setCategoria(s.categoria);
+    // Las situaciones que piden "especificar" dejan el texto listo para que
+    // el usuario agregue el detalle después de los dos puntos.
+    setDescripcion(s.requiereDetalle ? `${s.etiqueta}: ` : s.etiqueta);
+  }
 
   async function agregarRegistro(e: React.FormEvent) {
     e.preventDefault();
@@ -98,6 +131,7 @@ export default function SeguimientoInstitucional() {
       disciplina_id: disciplinaId || null,
     });
     setDescripcion("");
+    setSituacion("");
     setGuardando(false);
     cargarDetalle();
   }
@@ -163,6 +197,21 @@ export default function SeguimientoInstitucional() {
           {tab === "anecdotico" ? (
             <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
               <form onSubmit={agregarRegistro} className="flex flex-col gap-3">
+                <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+                  Situación (opcional, para completar más rápido)
+                  <select
+                    value={situacion}
+                    onChange={(e) => elegirSituacion(e.target.value)}
+                    className="h-10 rounded-lg border border-border px-3 text-sm bg-card"
+                  >
+                    <option value="">Escribir libremente…</option>
+                    {SITUACIONES.map((s) => (
+                      <option key={s.valor} value={s.valor}>
+                        {s.etiqueta}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                   <select
                     value={categoria}
@@ -187,7 +236,7 @@ export default function SeguimientoInstitucional() {
                 <textarea
                   value={descripcion}
                   onChange={(e) => setDescripcion(e.target.value)}
-                  placeholder="Descripción del registro…"
+                  placeholder="Descripción del registro… (si elegiste una situación arriba, acá podés agregar el detalle)"
                   className="rounded-lg border border-border px-3 py-2 text-sm bg-card min-h-20 w-full"
                   required
                 />
