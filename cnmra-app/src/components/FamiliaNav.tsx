@@ -9,7 +9,9 @@ const links = [
   { href: "/familia", label: "Inicio" },
   { href: "/familia/inscripcion", label: "Inscripción" },
   { href: "/familia/acuerdo", label: "Acuerdo" },
-  { href: "/familia/seguimiento", label: "Seguimiento" },
+  { href: "/familia/asistencia", label: "Asistencia" },
+  { href: "/familia/notas", label: "Notas" },
+  { href: "/familia/anotaciones", label: "Anotaciones" },
 ];
 
 export default function FamiliaNav({ nombre }: { nombre: string }) {
@@ -48,11 +50,11 @@ export default function FamiliaNav({ nombre }: { nombre: string }) {
           Salir
         </button>
       </div>
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-card border-t border-border flex items-center justify-around">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-card border-t border-border flex items-center justify-around overflow-x-auto px-1">
         {links.map((l) => {
           const active = l.href === "/familia" ? pathname === l.href : pathname.startsWith(l.href);
           return (
-            <Link key={l.href} href={l.href} className={`text-[11px] font-medium ${active ? "text-navy" : "text-text-soft"}`}>
+            <Link key={l.href} href={l.href} className={`text-[10px] font-medium px-1 text-center shrink-0 ${active ? "text-navy" : "text-text-soft"}`}>
               {l.label}
             </Link>
           );
