@@ -38,6 +38,20 @@ const BOTONES_GRANDES = [
     descripcion: "Registro anecdótico del/a estudiante",
     color: "bg-[#FBEAE8] border-[#F3C9C4]",
   },
+  {
+    href: "/familia/avisos-institucionales",
+    icono: "📢",
+    titulo: "Avisos",
+    descripcion: "Convocatorias y reuniones del colegio",
+    color: "bg-[#EAF0FF] border-[#C9D8FF]",
+  },
+  {
+    href: "/familia/avisos-estudiante",
+    icono: "🔔",
+    titulo: "Avisos de mi hijo/a",
+    descripcion: "Convocatorias puntuales para tu hijo/a",
+    color: "bg-[#FFF3DF] border-[#F3DBAE]",
+  },
 ];
 
 export default async function FamiliaInicio() {
