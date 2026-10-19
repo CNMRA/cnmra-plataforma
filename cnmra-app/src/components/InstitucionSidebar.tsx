@@ -10,6 +10,7 @@ const links = [
   { href: "/institucion", label: "Panel" },
   { href: "/institucion/inscripcion", label: "Inscripción" },
   { href: "/institucion/cursos", label: "Cursos" },
+  { href: "/institucion/avisos", label: "Avisos" },
   { href: "/institucion/usuarios", label: "Usuarios" },
 ];
 
