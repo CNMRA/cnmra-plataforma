@@ -9,6 +9,23 @@ type Candidato = { estudianteId: string; nombre: string };
 const ANIO_ACTUAL = new Date().getFullYear();
 const ANIOS_LECTIVOS = [ANIO_ACTUAL, ANIO_ACTUAL + 1, ANIO_ACTUAL + 2];
 
+// Normaliza un nombre para comparar sin que importen tildes, mayúsculas
+// ni espacios de más (ej: "María López" y "maria  lopez" se consideran iguales).
+function normalizar(texto: string) {
+  return texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+// Normaliza una cédula para comparar dejando solo los números
+// (ej: "7.270.010" y "7270010" se consideran iguales).
+function normalizarCedula(cedula: string) {
+  return cedula.replace(/\D/g, "");
+}
+
 export default function InscripcionFamilia() {
   const supabase = createClient();
   const [cursos, setCursos] = useState<Curso[]>([]);
@@ -62,20 +79,29 @@ export default function InscripcionFamilia() {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Buscar si la institución ya cargó a este estudiante (por cédula o por nombre
-    // exacto) pero todavía ninguna familia lo "reclamó" desde su cuenta — para no
-    // crear un duplicado y, en cambio, ofrecer vincularlo directamente. Esto usa una
-    // función especial en la base de datos (no una consulta directa a "estudiantes"),
-    // porque una familia normal no tiene permiso para ver estudiantes de otras
-    // familias, y esa función es la única forma segura de encontrar la coincidencia.
+    // Buscar si la institución ya cargó a este estudiante pero todavía ninguna
+    // familia lo "reclamó" desde su cuenta — para no crear un duplicado y, en
+    // cambio, ofrecer vincularlo directamente. Se compara por cédula (sin
+    // importar puntos ni guiones) y también por nombre normalizado (sin
+    // tildes, mayúsculas ni espacios de más), para que una diferencia de
+    // formato o de tipeo en cualquiera de los dos campos no impida detectar
+    // la coincidencia.
     const cedulaLimpia = sinCedula ? "" : cedula.trim();
+    const cedulaNormalizada = normalizarCedula(cedulaLimpia);
     const nombreLimpio = nombre.trim();
+    const nombreNormalizado = normalizar(nombreLimpio);
 
-    const { data: coincidencias } = await supabase.rpc("buscar_estudiante_no_reclamado", {
-      p_cedula: cedulaLimpia || null,
-      p_nombre: cedulaLimpia ? null : nombreLimpio,
+    const { data: posibles } = await supabase
+      .from("estudiantes")
+      .select("id, nombre_completo, cedula, familia_id, familias(tutor_perfil_id)");
+
+    const encontrado = (posibles ?? []).find((est) => {
+      const fam = est.familias as unknown as { tutor_perfil_id: string | null } | null;
+      if (fam && fam.tutor_perfil_id) return false; // ya tiene una familia con cuenta
+      const cedulaCoincide = Boolean(cedulaNormalizada) && Boolean(est.cedula) && normalizarCedula(est.cedula) === cedulaNormalizada;
+      const nombreCoincide = normalizar(est.nombre_completo) === nombreNormalizado;
+      return cedulaCoincide || nombreCoincide;
     });
-    const encontrado = coincidencias && coincidencias.length > 0 ? coincidencias[0] : null;
 
     if (encontrado) {
       setCandidato({ estudianteId: encontrado.id, nombre: encontrado.nombre_completo });
@@ -91,17 +117,17 @@ export default function InscripcionFamilia() {
     }
 
     // Evitar que un mismo responsable inscriba dos veces al mismo hijo/a:
-    // se compara por cédula (si tiene) o por nombre completo (si no tiene cédula).
+    // se compara por cédula normalizada (sin puntos/guiones) o por nombre
+    // normalizado, lo que coincida primero.
     const { data: existentes } = await supabase
       .from("estudiantes")
       .select("id, nombre_completo, cedula")
       .eq("familia_id", familia.id);
 
-    const cedulaLimpiaMin = cedulaLimpia.toLowerCase();
-    const nombreLimpioMin = nombreLimpio.toLowerCase();
     const yaExiste = (existentes ?? []).some((est) => {
-      if (cedulaLimpiaMin) return (est.cedula ?? "").trim().toLowerCase() === cedulaLimpiaMin;
-      return est.nombre_completo.trim().toLowerCase() === nombreLimpioMin;
+      const cedulaCoincide = Boolean(cedulaNormalizada) && Boolean(est.cedula) && normalizarCedula(est.cedula) === cedulaNormalizada;
+      const nombreCoincide = normalizar(est.nombre_completo) === nombreNormalizado;
+      return cedulaCoincide || nombreCoincide;
     });
 
     if (yaExiste) {
