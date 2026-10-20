@@ -30,6 +30,8 @@ const ETIQUETA_NIVEL: Record<Nivel, string> = {
   estudiante: "Un estudiante",
 };
 
+const TITULOS_PREESTABLECIDOS = ["Reunión de Padres", "Entrevista", "Comunicado", "Invitación", "Otros"];
+
 export default function AvisosInstitucion() {
   const supabase = createClient();
   const [cursos, setCursos] = useState<Curso[]>([]);
@@ -39,7 +41,8 @@ export default function AvisosInstitucion() {
   const [nivel, setNivel] = useState<Nivel>("colegio");
   const [cursoId, setCursoId] = useState("");
   const [estudianteId, setEstudianteId] = useState("");
-  const [titulo, setTitulo] = useState("");
+  const [tituloElegido, setTituloElegido] = useState("");
+  const [tituloOtro, setTituloOtro] = useState("");
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("");
   const [lugar, setLugar] = useState("");
@@ -74,7 +77,18 @@ export default function AvisosInstitucion() {
 
   async function publicar(e: React.FormEvent) {
     e.preventDefault();
-    if (!titulo.trim() || !contenido.trim()) return;
+
+    const titulo = tituloElegido === "Otros" ? tituloOtro.trim() : tituloElegido;
+
+    if (!tituloElegido) {
+      setMensaje("Elegí el título del aviso.");
+      return;
+    }
+    if (tituloElegido === "Otros" && !tituloOtro.trim()) {
+      setMensaje("Especificá el título del aviso.");
+      return;
+    }
+    if (!contenido.trim()) return;
     if (nivel === "curso" && !cursoId) {
       setMensaje("Elegí un curso.");
       return;
@@ -108,7 +122,7 @@ export default function AvisosInstitucion() {
       nivel,
       curso_id: nivel === "curso" ? cursoId : null,
       estudiante_id: nivel === "estudiante" ? estudianteId : null,
-      titulo: titulo.trim(),
+      titulo,
       fecha: fecha || null,
       hora: hora || null,
       lugar: lugar.trim() || null,
@@ -123,7 +137,8 @@ export default function AvisosInstitucion() {
       return;
     }
 
-    setTitulo("");
+    setTituloElegido("");
+    setTituloOtro("");
     setFecha("");
     setHora("");
     setLugar("");
@@ -195,15 +210,39 @@ export default function AvisosInstitucion() {
           )}
         </div>
 
-        <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-          Título
-          <input
-            required
-            value={titulo}
-            onChange={(e) => setTitulo(e.target.value)}
-            className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
-          />
-        </label>
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+            Título
+            <select
+              required
+              value={tituloElegido}
+              onChange={(e) => {
+                setTituloElegido(e.target.value);
+                if (e.target.value !== "Otros") setTituloOtro("");
+              }}
+              className="h-11 rounded-lg border border-border px-3 text-sm bg-card min-w-[220px]"
+            >
+              <option value="">Seleccionar…</option>
+              {TITULOS_PREESTABLECIDOS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {tituloElegido === "Otros" && (
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium flex-1">
+              Especificar título
+              <input
+                required
+                value={tituloOtro}
+                onChange={(e) => setTituloOtro(e.target.value)}
+                className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
+              />
+            </label>
+          )}
+        </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <label className="flex flex-col gap-1.5 text-[13px] font-medium">
