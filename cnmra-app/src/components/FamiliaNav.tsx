@@ -12,8 +12,7 @@ const links = [
   { href: "/familia/asistencia", label: "Asistencia" },
   { href: "/familia/notas", label: "Notas" },
   { href: "/familia/anotaciones", label: "Anotaciones" },
-  { href: "/familia/avisos-institucionales", label: "Avisos" },
-  { href: "/familia/avisos-estudiante", label: "Avisos de mi hijo/a" },
+  { href: "/familia/avisos", label: "Avisos" },
 ];
 
 export default function FamiliaNav({ nombre }: { nombre: string }) {
