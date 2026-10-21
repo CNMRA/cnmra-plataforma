@@ -5,7 +5,14 @@ import NotificacionesFamilia from "@/components/NotificacionesFamilia";
 const SECCIONES = ["avisos", "notas", "asistencia", "anotaciones"] as const;
 type Seccion = (typeof SECCIONES)[number];
 
-const BOTONES_GRANDES = [
+const BOTONES_GRANDES: {
+  href: string;
+  icono: string;
+  titulo: string;
+  descripcion: string;
+  color: string;
+  seccion?: Seccion;
+}[] = [
   {
     href: "/familia/inscripcion",
     icono: "📝",
@@ -14,25 +21,12 @@ const BOTONES_GRANDES = [
     color: "bg-[#EAF0FF] border-[#C9D8FF]",
   },
   {
-    href: "/familia/acuerdo",
-    icono: "🤝",
-    titulo: "Acuerdo",
-    descripcion: "Acuerdo de convivencia",
-    color: "bg-[#EAF0FF] border-[#C9D8FF]",
-  },
-  {
     href: "/familia/asistencia",
     icono: "📅",
     titulo: "Asistencia",
     descripcion: "Días presentes y ausentes",
     color: "bg-[#E7F3EB] border-[#BFE3CB]",
-  },
-  {
-    href: "/familia/notas",
-    icono: "📊",
-    titulo: "Notas",
-    descripcion: "Ver y descargar las calificaciones",
-    color: "bg-[#FFF3DF] border-[#F3DBAE]",
+    seccion: "asistencia",
   },
   {
     href: "/familia/anotaciones",
@@ -40,28 +34,31 @@ const BOTONES_GRANDES = [
     titulo: "Anotaciones",
     descripcion: "Registro anecdótico del/a estudiante",
     color: "bg-[#FBEAE8] border-[#F3C9C4]",
+    seccion: "anotaciones",
   },
   {
-    href: "/familia/avisos-institucionales",
+    href: "/familia/notas",
+    icono: "📊",
+    titulo: "Notas",
+    descripcion: "Ver y descargar las calificaciones",
+    color: "bg-[#FFF3DF] border-[#F3DBAE]",
+    seccion: "notas",
+  },
+  {
+    href: "/familia/avisos",
     icono: "📢",
     titulo: "Avisos",
-    descripcion: "Convocatorias y reuniones del colegio",
+    descripcion: "Convocatorias y reuniones",
     color: "bg-[#EAF0FF] border-[#C9D8FF]",
+    seccion: "avisos",
   },
   {
-    href: "/familia/avisos-estudiante",
-    icono: "🔔",
-    titulo: "Avisos de mi hijo/a",
-    descripcion: "Convocatorias puntuales para tu hijo/a",
-    color: "bg-[#FFF3DF] border-[#F3DBAE]",
+    href: "/familia/acuerdo",
+    icono: "🤝",
+    titulo: "Acuerdo",
+    descripcion: "Acuerdo de convivencia",
+    color: "bg-[#EAF0FF] border-[#C9D8FF]",
   },
-];
-
-const CHIPS: { seccion: Seccion; href: string; icono: string; etiqueta: string }[] = [
-  { seccion: "avisos", href: "/familia/avisos-institucionales", icono: "📢", etiqueta: "Avisos" },
-  { seccion: "notas", href: "/familia/notas", icono: "📊", etiqueta: "Notas" },
-  { seccion: "asistencia", href: "/familia/asistencia", icono: "📅", etiqueta: "Asistencia" },
-  { seccion: "anotaciones", href: "/familia/anotaciones", icono: "🗒️", etiqueta: "Anotaciones" },
 ];
 
 export default async function FamiliaInicio() {
@@ -180,49 +177,28 @@ export default async function FamiliaInicio() {
         </div>
       )}
 
-      {estudiantes && estudiantes.length > 0 && (
-        <div>
-          <h2 className="text-[13px] font-semibold text-text-soft uppercase tracking-wide mb-3">Novedades</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {CHIPS.map((c) => {
-              const cantidad = notificaciones[c.seccion];
-              return (
-                <Link
-                  key={c.seccion}
-                  href={c.href}
-                  className="relative bg-card border border-border rounded-xl p-4 flex flex-col items-center text-center gap-1 hover:opacity-85 active:scale-[0.98] transition"
-                >
-                  {cantidad > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-danger text-white text-[11px] font-bold rounded-full min-w-[22px] h-[22px] flex items-center justify-center px-1">
-                      {cantidad}
-                    </span>
-                  )}
-                  <span className="text-2xl leading-none">{c.icono}</span>
-                  <span className="text-[12.5px] font-semibold">{c.etiqueta}</span>
-                  <span className="text-[11px] text-text-soft">
-                    {cantidad > 0 ? `${cantidad} nueva${cantidad === 1 ? "" : "s"}` : "Sin novedades"}
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       <div>
         <h2 className="text-[13px] font-semibold text-text-soft uppercase tracking-wide mb-3">¿Qué necesitás hacer?</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {BOTONES_GRANDES.map((b) => (
-            <Link
-              key={b.href}
-              href={b.href}
-              className={`${b.color} border rounded-2xl p-5 flex flex-col items-center text-center gap-1.5 hover:opacity-85 active:scale-[0.98] transition`}
-            >
-              <span className="text-4xl leading-none">{b.icono}</span>
-              <span className="font-display font-bold text-base mt-1">{b.titulo}</span>
-              <span className="text-xs text-text-soft">{b.descripcion}</span>
-            </Link>
-          ))}
+          {BOTONES_GRANDES.map((b) => {
+            const cantidad = b.seccion ? notificaciones[b.seccion] : 0;
+            return (
+              <Link
+                key={b.href}
+                href={b.href}
+                className={`${b.color} border rounded-2xl p-5 flex flex-col items-center text-center gap-1.5 hover:opacity-85 active:scale-[0.98] transition relative`}
+              >
+                {cantidad > 0 && (
+                  <span className="absolute top-2 right-2 bg-danger text-white text-[11px] font-bold rounded-full min-w-[22px] h-[22px] flex items-center justify-center px-1">
+                    {cantidad}
+                  </span>
+                )}
+                <span className="text-4xl leading-none">{b.icono}</span>
+                <span className="font-display font-bold text-base mt-1">{b.titulo}</span>
+                <span className="text-xs text-text-soft">{b.descripcion}</span>
+              </Link>
+            );
+          })}
         </div>
       </div>
 
