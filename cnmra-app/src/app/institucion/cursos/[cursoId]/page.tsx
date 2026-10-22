@@ -15,7 +15,7 @@ import {
 
 type Curso = { id: string; grado: string; turno: string; ciclo: string; enfasis: string | null };
 type Seccion = { id: string; nombre: string };
-type Estudiante = { id: string; nombre_completo: string; cedula: string | null };
+type Estudiante = { id: string; nombre_completo: string; cedula: string | null; familia_id: string | null };
 type Disciplina = { id: string; nombre: string; orden: number };
 type Registro = {
   id: string;
@@ -27,7 +27,7 @@ type Registro = {
 };
 type CalifRow = { id: string; disciplina_id: string; instancia: Instancia; nota: number | null };
 
-type Tab = "asistencia" | "anecdotico" | "calificaciones";
+type Tab = "asistencia" | "anecdotico" | "calificaciones" | "lista";
 type Supa = ReturnType<typeof createClient>;
 
 const etiquetaTurno: Record<string, string> = {
@@ -70,7 +70,7 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
     const { data: estudiantesData } = seccionIds.length
       ? await supabase
           .from("estudiantes")
-          .select("id, nombre_completo, cedula")
+          .select("id, nombre_completo, cedula, familia_id")
           .in("seccion_id", seccionIds)
           .eq("estado", "activo")
           .order("nombre_completo")
@@ -171,6 +171,9 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
         <TabButton activo={tab === "calificaciones"} onClick={() => setTab("calificaciones")}>
           Calificaciones
         </TabButton>
+        <TabButton activo={tab === "lista"} onClick={() => setTab("lista")}>
+          Lista
+        </TabButton>
       </div>
 
       {estudiantes.length === 0 && (
@@ -222,12 +225,21 @@ export default function CursoDetallePage({ params }: { params: Promise<{ cursoId
           cursoId={cursoId}
         />
       )}
+
+      {estudiantes.length > 0 && tab === "lista" && (
+        <PanelLista
+          estudiantes={estudiantes}
+          cursoId={cursoId}
+          onActualizarEstudiante={actualizarEstudiante}
+          onEliminarEstudiante={eliminarEstudiante}
+        />
+      )}
     </div>
   );
 }
 
 // Cartel de confirmación fijo arriba de la pantalla, visible sin importar
-// en qué pestaña (Asistencia/Anecdótico/Calificaciones) esté la persona.
+// en qué pestaña (Asistencia/Anecdótico/Calificaciones/Lista) esté la persona.
 function Toast({ mensaje }: { mensaje: string | null }) {
   if (!mensaje) return null;
   return (
@@ -435,7 +447,7 @@ function ChipMateria({ activo, onClick, children }: { activo: boolean; onClick: 
 }
 
 // Formulario inline para editar nombre y cédula de un estudiante. Se usa tanto en la fila
-// desplegable (Anecdótico/Calificaciones) como en la lista plana de Asistencia.
+// desplegable (Anecdótico/Calificaciones) como en la lista plana de Asistencia y Lista.
 function FormularioEditarEstudiante({
   estudiante,
   onGuardar,
@@ -537,6 +549,89 @@ function FilaEstudiante({
         </button>
       </div>
       {abierto && <div className="pb-4 flex flex-col gap-3">{children}</div>}
+    </div>
+  );
+}
+
+// ========== LISTA (nombre, cédula, vínculo con familia) ==========
+function PanelLista({
+  estudiantes,
+  cursoId,
+  onActualizarEstudiante,
+  onEliminarEstudiante,
+}: {
+  estudiantes: Estudiante[];
+  cursoId: string;
+  onActualizarEstudiante: (estudianteId: string, nombre: string, cedula: string) => Promise<void>;
+  onEliminarEstudiante: (estudianteId: string, nombre: string) => Promise<void>;
+}) {
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-3 text-[13px] text-text-soft">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#2F9E62] inline-block" />
+            Vinculado a familia
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#C9A227] inline-block" />
+            Solo colegio
+          </span>
+        </div>
+        <Link
+          href={`/institucion/cursos/${cursoId}/lista-estudiantes`}
+          className="text-xs text-teal font-medium"
+        >
+          Ver lista para imprimir →
+        </Link>
+      </div>
+
+      <div className="flex flex-col border-t border-border pt-2">
+        {estudiantes.map((e) =>
+          editandoId === e.id ? (
+            <FormularioEditarEstudiante
+              key={e.id}
+              estudiante={e}
+              onCancelar={() => setEditandoId(null)}
+              onGuardar={async (nombre, cedula) => {
+                await onActualizarEstudiante(e.id, nombre, cedula);
+                setEditandoId(null);
+              }}
+            />
+          ) : (
+            <div key={e.id} className="flex items-center justify-between gap-3 py-2.5 border-b border-border last:border-none">
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate">{e.nombre_completo}</div>
+                <div className="text-xs text-text-soft">{e.cedula ?? "Sin cédula"}</div>
+              </div>
+              {e.familia_id ? (
+                <span className="inline-flex items-center gap-1.5 bg-[#E6F4EC] text-[#1E7A47] text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#2F9E62] inline-block" />
+                  Vinculado
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 bg-[#FBF3DE] text-[#8A6D1B] text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#C9A227] inline-block" />
+                  Solo colegio
+                </span>
+              )}
+              <button type="button" onClick={() => setEditandoId(e.id)} title="Editar nombre o cédula" className="text-base px-1 shrink-0">
+                ✏️
+              </button>
+              <button
+                type="button"
+                onClick={() => onEliminarEstudiante(e.id, e.nombre_completo)}
+                title="Eliminar estudiante"
+                className="text-base px-1 shrink-0"
+              >
+                🗑️
+              </button>
+            </div>
+          )
+        )}
+      </div>
     </div>
   );
 }
