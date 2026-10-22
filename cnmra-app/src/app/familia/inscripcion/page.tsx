@@ -9,8 +9,6 @@ type Candidato = { estudianteId: string; nombre: string };
 const ANIO_ACTUAL = new Date().getFullYear();
 const ANIOS_LECTIVOS = [ANIO_ACTUAL, ANIO_ACTUAL + 1, ANIO_ACTUAL + 2];
 
-// Normaliza un nombre para comparar sin que importen tildes, mayúsculas
-// ni espacios de más (ej: "María López" y "maria  lopez" se consideran iguales).
 function normalizar(texto: string) {
   return texto
     .normalize("NFD")
@@ -20,10 +18,8 @@ function normalizar(texto: string) {
     .replace(/\s+/g, " ");
 }
 
-// Normaliza una cédula para comparar dejando solo los números
-// (ej: "7.270.010" y "7270010" se consideran iguales).
-function normalizarCedula(cedula: string) {
-  return cedula.replace(/\D/g, "");
+function soloDigitos(texto: string) {
+  return texto.replace(/\D/g, "");
 }
 
 export default function InscripcionFamilia() {
@@ -79,17 +75,10 @@ export default function InscripcionFamilia() {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Buscar si la institución ya cargó a este estudiante pero todavía ninguna
-    // familia lo "reclamó" desde su cuenta — para no crear un duplicado y, en
-    // cambio, ofrecer vincularlo directamente. Se compara por cédula (sin
-    // importar puntos ni guiones) y también por nombre normalizado (sin
-    // tildes, mayúsculas ni espacios de más), para que una diferencia de
-    // formato o de tipeo en cualquiera de los dos campos no impida detectar
-    // la coincidencia.
-    const cedulaLimpia = sinCedula ? "" : cedula.trim();
-    const cedulaNormalizada = normalizarCedula(cedulaLimpia);
+    const cedulaLimpia = sinCedula ? "" : soloDigitos(cedula);
     const nombreLimpio = nombre.trim();
     const nombreNormalizado = normalizar(nombreLimpio);
+    const usarCedulaComoClave = !sinCedula && Boolean(cedulaLimpia);
 
     const { data: posibles } = await supabase
       .from("estudiantes")
@@ -97,10 +86,11 @@ export default function InscripcionFamilia() {
 
     const encontrado = (posibles ?? []).find((est) => {
       const fam = est.familias as unknown as { tutor_perfil_id: string | null } | null;
-      if (fam && fam.tutor_perfil_id) return false; // ya tiene una familia con cuenta
-      const cedulaCoincide = Boolean(cedulaNormalizada) && Boolean(est.cedula) && normalizarCedula(est.cedula) === cedulaNormalizada;
-      const nombreCoincide = normalizar(est.nombre_completo) === nombreNormalizado;
-      return cedulaCoincide || nombreCoincide;
+      if (fam && fam.tutor_perfil_id) return false;
+      if (usarCedulaComoClave) {
+        return Boolean(est.cedula) && soloDigitos(est.cedula) === cedulaLimpia;
+      }
+      return normalizar(est.nombre_completo) === nombreNormalizado;
     });
 
     if (encontrado) {
@@ -116,18 +106,16 @@ export default function InscripcionFamilia() {
       return;
     }
 
-    // Evitar que un mismo responsable inscriba dos veces al mismo hijo/a:
-    // se compara por cédula normalizada (sin puntos/guiones) o por nombre
-    // normalizado, lo que coincida primero.
     const { data: existentes } = await supabase
       .from("estudiantes")
       .select("id, nombre_completo, cedula")
       .eq("familia_id", familia.id);
 
     const yaExiste = (existentes ?? []).some((est) => {
-      const cedulaCoincide = Boolean(cedulaNormalizada) && Boolean(est.cedula) && normalizarCedula(est.cedula) === cedulaNormalizada;
-      const nombreCoincide = normalizar(est.nombre_completo) === nombreNormalizado;
-      return cedulaCoincide || nombreCoincide;
+      if (usarCedulaComoClave) {
+        return Boolean(est.cedula) && soloDigitos(est.cedula) === cedulaLimpia;
+      }
+      return normalizar(est.nombre_completo) === nombreNormalizado;
     });
 
     if (yaExiste) {
@@ -141,7 +129,7 @@ export default function InscripcionFamilia() {
       .insert({
         familia_id: familia.id,
         nombre_completo: nombre,
-        cedula: sinCedula ? null : cedula.trim(),
+        cedula: sinCedula ? null : cedulaLimpia,
         fecha_nacimiento: fechaNacimiento || null,
       })
       .select("id")
@@ -239,8 +227,9 @@ export default function InscripcionFamilia() {
             <input
               required={!sinCedula}
               disabled={sinCedula}
+              inputMode="numeric"
               value={cedula}
-              onChange={(e) => setCedula(e.target.value)}
+              onChange={(e) => setCedula(soloDigitos(e.target.value))}
               className="h-11 rounded-lg border border-border px-3 text-sm bg-card disabled:opacity-50"
             />
           </label>
