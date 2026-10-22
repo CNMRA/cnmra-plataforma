@@ -25,7 +25,8 @@ function soloDigitos(texto: string) {
 export default function InscripcionFamilia() {
   const supabase = createClient();
   const [cursos, setCursos] = useState<Curso[]>([]);
-  const [nombre, setNombre] = useState("");
+  const [apellido, setApellido] = useState("");
+  const [nombrePila, setNombrePila] = useState("");
   const [cedula, setCedula] = useState("");
   const [sinCedula, setSinCedula] = useState(false);
   const [fechaNacimiento, setFechaNacimiento] = useState("");
@@ -66,6 +67,8 @@ export default function InscripcionFamilia() {
       return;
     }
 
+    const nombreCompleto = `${apellido.trim()} ${nombrePila.trim()}`.replace(/\s+/g, " ").trim();
+
     setGuardando(true);
     setMensaje(null);
     setCandidato(null);
@@ -76,8 +79,7 @@ export default function InscripcionFamilia() {
     if (!user) return;
 
     const cedulaLimpia = sinCedula ? "" : soloDigitos(cedula);
-    const nombreLimpio = nombre.trim();
-    const nombreNormalizado = normalizar(nombreLimpio);
+    const nombreNormalizado = normalizar(nombreCompleto);
     const usarCedulaComoClave = !sinCedula && Boolean(cedulaLimpia);
 
     const { data: posibles } = await supabase
@@ -128,7 +130,7 @@ export default function InscripcionFamilia() {
       .from("estudiantes")
       .insert({
         familia_id: familia.id,
-        nombre_completo: nombre,
+        nombre_completo: nombreCompleto,
         cedula: sinCedula ? null : cedulaLimpia,
         fecha_nacimiento: fechaNacimiento || null,
       })
@@ -153,7 +155,8 @@ export default function InscripcionFamilia() {
     });
 
     setMensaje("Inscripción enviada. La institución la va a revisar.");
-    setNombre("");
+    setApellido("");
+    setNombrePila("");
     setCedula("");
     setSinCedula(false);
     setFechaNacimiento("");
@@ -193,7 +196,8 @@ export default function InscripcionFamilia() {
 
     setMensaje(`${candidato.nombre} fue vinculado/a a tu cuenta. Ya lo/la vas a ver en Inicio.`);
     setCandidato(null);
-    setNombre("");
+    setApellido("");
+    setNombrePila("");
     setCedula("");
     setSinCedula(false);
     setFechaNacimiento("");
@@ -217,8 +221,29 @@ export default function InscripcionFamilia() {
 
       <form onSubmit={enviar} className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
         <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-          Nombre completo del hijo/a
-          <input required value={nombre} onChange={(e) => setNombre(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
+          Apellido(s) del hijo/a
+          <input
+            required
+            minLength={3}
+            value={apellido}
+            onChange={(e) => setApellido(e.target.value)}
+            placeholder="Ej: Avila Amarilla"
+            className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
+          />
+          <span className="text-[11.5px] text-text-soft font-normal">Escribilo completo — si tiene dos apellidos, los dos.</span>
+        </label>
+
+        <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+          Nombre(s) del hijo/a
+          <input
+            required
+            minLength={3}
+            value={nombrePila}
+            onChange={(e) => setNombrePila(e.target.value)}
+            placeholder="Ej: Emilia Esperanza"
+            className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
+          />
+          <span className="text-[11.5px] text-text-soft font-normal">Escribilo completo — si tiene más de un nombre, todos.</span>
         </label>
 
         <div className="flex flex-col gap-1.5">
