@@ -223,26 +223,26 @@ export default function InscripcionFamilia() {
         <label className="flex flex-col gap-1.5 text-[13px] font-medium">
           Apellido(s) del hijo/a
           <input
-            required
-            minLength={3}
-            value={apellido}
-            onChange={(e) => setApellido(e.target.value)}
-            placeholder="Ej: Avila Amarilla"
-            className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
-          />
+  required
+  minLength={3}
+  value={apellido}
+  onChange={(e) => setApellido(e.target.value)}
+  placeholder="Ej: Gonzalez Benitez"
+  className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
+/>
           <span className="text-[11.5px] text-text-soft font-normal">Escribilo completo — si tiene dos apellidos, los dos.</span>
         </label>
 
         <label className="flex flex-col gap-1.5 text-[13px] font-medium">
           Nombre(s) del hijo/a
           <input
-            required
-            minLength={3}
-            value={nombrePila}
-            onChange={(e) => setNombrePila(e.target.value)}
-            placeholder="Ej: Emilia Esperanza"
-            className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
-          />
+  required
+  minLength={3}
+  value={nombrePila}
+  onChange={(e) => setNombrePila(e.target.value)}
+  placeholder="Ej: Juan Carlos"
+  className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
+/>
           <span className="text-[11.5px] text-text-soft font-normal">Escribilo completo — si tiene más de un nombre, todos.</span>
         </label>
 
