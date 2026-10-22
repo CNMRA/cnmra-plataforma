@@ -7,7 +7,7 @@ type Curso = { id: string; grado: string; turno: string; enfasis: string | null 
 type Candidato = { estudianteId: string; nombre: string };
 
 const ANIO_ACTUAL = new Date().getFullYear();
-const ANIOS_LECTIVOS = [ANIO_ACTUAL, ANIO_ACTUAL + 1, ANIO_ACTUAL + 2];
+const ANIOS_LECTIVOS = [ANIO_ACTUAL, ANIO_ACTUAL + 1];
 
 function normalizar(texto: string) {
   return texto
