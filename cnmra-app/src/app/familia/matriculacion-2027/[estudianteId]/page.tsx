@@ -8,7 +8,15 @@ const ANIO_LECTIVO = 2027;
 
 type Curso = { id: string; grado: string; turno: string; enfasis: string | null };
 type Estudiante = { id: string; nombre_completo: string; cedula: string | null; familia_id: string | null };
-type Persona = { nombre: string; cedula: string; vinculo: string; telefono: string };
+type Responsable = {
+  nombre: string;
+  cedula: string;
+  vinculo: string;
+  telefono: string;
+  direccion: string;
+  ocupacion: string;
+  correo: string;
+};
 
 type FichaDB = {
   id: string;
@@ -24,15 +32,9 @@ type FichaDB = {
   discapacidad_apoyo: string | null;
   responsable_nombre: string | null;
   responsable_cedula: string | null;
-  responsable_ocupacion: string | null;
   responsable_vinculo: string | null;
-  responsable_vinculo_otro: string | null;
   responsable_telefono: string | null;
-  responsable_correo: string | null;
   responsable_direccion: string | null;
-  segundo_contacto_nombre: string | null;
-  segundo_contacto_vinculo: string | null;
-  segundo_contacto_telefono: string | null;
   emergencia_nombre: string | null;
   emergencia_vinculo: string | null;
   emergencia_telefono: string | null;
@@ -65,7 +67,7 @@ const SECCIONES_CARTA: Seccion[] = [
     puntos: [
       "Asegurar la asistencia regular y puntual, con llegada 10 minutos antes del inicio para la formación general, y la permanencia del/de la estudiante durante toda la jornada.",
       "Justificar toda ausencia dentro de las 24 horas, sabiendo que tres llegadas tardías equivalen a un día de ausencia y que las ausencias en días de examen deben justificarse el mismo día.",
-      "Retirar anticipadamente al/a la estudiante solo de forma personal (o por un adulto autorizado en el punto IV de este formulario), registrando la salida en Secretaría. No se aceptarán retiros por llamada telefónica.",
+      "Retirar anticipadamente al/a la estudiante solo de forma personal, registrando la salida en Secretaría. No se aceptarán retiros por llamada telefónica.",
     ],
   },
   {
@@ -107,7 +109,7 @@ const SECCIONES_CARTA: Seccion[] = [
     letra: "G",
     titulo: "Autorización de uso de imágenes",
     puntos: [
-      "Con la firma del presente formulario, autorizo a la institución a tomar fotografías y videos del/de la estudiante durante el desarrollo de las actividades escolares y de investigación, y a utilizarlos en documentos de seguimiento, sistematización, investigación y difusión institucional, siempre con fines educativos y académicos, y respetando su dignidad (Ley N° 7.593/2025).",
+      "Con la firma del presente formulario, autorizo a la institución a tomar fotografías y videos del/de la estudiante durante el desarrollo de las actividades escolares, y a utilizarlos en documentos de seguimiento, sistematización y difusión institucional, siempre con fines educativos y académicos, y respetando su dignidad (Ley N° 7.593/2025).",
       "Asimismo, manifestamos nuestra conformidad de que, ante el incumplimiento de cualquiera de los compromisos asumidos o de lo establecido en las Normas de Convivencia, respetaremos las medidas y decisiones adoptadas por las instancias institucionales correspondientes, conforme al procedimiento formativo y restaurativo previsto en dichas normas.",
     ],
   },
@@ -123,6 +125,10 @@ const CAMPO_POR_LETRA: Record<string, keyof FichaDB> = {
   G: "carta_g_aceptada_en",
 };
 
+function responsableVacio(): Responsable {
+  return { nombre: "", cedula: "", vinculo: "", telefono: "", direccion: "", ocupacion: "", correo: "" };
+}
+
 export default function Matriculacion2027Wizard({ params }: { params: Promise<{ estudianteId: string }> }) {
   const { estudianteId } = use(params);
   const supabase = createClient();
@@ -132,13 +138,13 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
   const [estudiante, setEstudiante] = useState<Estudiante | null>(null);
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [ficha, setFicha] = useState<FichaDB | null>(null);
-  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [responsables, setResponsables] = useState<Responsable[]>([responsableVacio()]);
+  const [mostrarEmergencia, setMostrarEmergencia] = useState(false);
   const [paso, setPaso] = useState<"datos" | "carta" | "listo">("datos");
   const [cartaIndex, setCartaIndex] = useState(0);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
 
-  // Campos del formulario de datos
   const [tramite, setTramite] = useState("");
   const [cursoId, setCursoId] = useState("");
   const [nacionalidad, setNacionalidad] = useState("Paraguaya");
@@ -147,17 +153,6 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
   const [grupoSanguineo, setGrupoSanguineo] = useState("");
   const [enfermedades, setEnfermedades] = useState("");
   const [discapacidad, setDiscapacidad] = useState("");
-  const [respNombre, setRespNombre] = useState("");
-  const [respCedula, setRespCedula] = useState("");
-  const [respOcupacion, setRespOcupacion] = useState("");
-  const [respVinculo, setRespVinculo] = useState("");
-  const [respVinculoOtro, setRespVinculoOtro] = useState("");
-  const [respTelefono, setRespTelefono] = useState("");
-  const [respCorreo, setRespCorreo] = useState("");
-  const [respDireccion, setRespDireccion] = useState("");
-  const [segNombre, setSegNombre] = useState("");
-  const [segVinculo, setSegVinculo] = useState("");
-  const [segTelefono, setSegTelefono] = useState("");
   const [emerNombre, setEmerNombre] = useState("");
   const [emerVinculo, setEmerVinculo] = useState("");
   const [emerTelefono, setEmerTelefono] = useState("");
@@ -172,7 +167,7 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
 
     const { data: familia } = await supabase
       .from("familias")
-      .select("id, tutor_nombre, tutor_email, matriculacion_2027_habilitada")
+      .select("id, matriculacion_2027_habilitada")
       .eq("tutor_perfil_id", user.id)
       .maybeSingle();
 
@@ -211,29 +206,32 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
       setGrupoSanguineo(f.grupo_sanguineo ?? "");
       setEnfermedades(f.enfermedades_alergias ?? "");
       setDiscapacidad(f.discapacidad_apoyo ?? "");
-      setRespNombre(f.responsable_nombre ?? familia.tutor_nombre ?? "");
-      setRespCedula(f.responsable_cedula ?? "");
-      setRespOcupacion(f.responsable_ocupacion ?? "");
-      setRespVinculo(f.responsable_vinculo ?? "");
-      setRespVinculoOtro(f.responsable_vinculo_otro ?? "");
-      setRespTelefono(f.responsable_telefono ?? "");
-      setRespCorreo(f.responsable_correo ?? familia.tutor_email ?? "");
-      setRespDireccion(f.responsable_direccion ?? "");
-      setSegNombre(f.segundo_contacto_nombre ?? "");
-      setSegVinculo(f.segundo_contacto_vinculo ?? "");
-      setSegTelefono(f.segundo_contacto_telefono ?? "");
-      setEmerNombre(f.emergencia_nombre ?? "");
-      setEmerVinculo(f.emergencia_vinculo ?? "");
-      setEmerTelefono(f.emergencia_telefono ?? "");
 
-      const { data: personasData } = await supabase
-        .from("personas_autorizadas_retiro")
-        .select("nombre, cedula, vinculo, telefono")
-        .eq("ficha_id", f.id);
-      setPersonas(
-        personasData && personasData.length > 0
-          ? personasData.map((p) => ({ nombre: p.nombre, cedula: p.cedula ?? "", vinculo: p.vinculo ?? "", telefono: p.telefono ?? "" }))
-          : [{ nombre: "", cedula: "", vinculo: "", telefono: "" }]
+      if (f.emergencia_nombre) {
+        setMostrarEmergencia(true);
+        setEmerNombre(f.emergencia_nombre ?? "");
+        setEmerVinculo(f.emergencia_vinculo ?? "");
+        setEmerTelefono(f.emergencia_telefono ?? "");
+      }
+
+      const { data: responsablesData } = await supabase
+        .from("responsables_matriculacion")
+        .select("nombre, cedula, vinculo, telefono, direccion, ocupacion, correo")
+        .eq("ficha_id", f.id)
+        .order("orden");
+
+      setResponsables(
+        responsablesData && responsablesData.length > 0
+          ? responsablesData.map((r) => ({
+              nombre: r.nombre,
+              cedula: r.cedula,
+              vinculo: r.vinculo,
+              telefono: r.telefono,
+              direccion: r.direccion,
+              ocupacion: r.ocupacion ?? "",
+              correo: r.correo ?? "",
+            }))
+          : [responsableVacio()]
       );
 
       if (f.completado_en) {
@@ -243,10 +241,6 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
         setPaso("carta");
         setCartaIndex(primeraSinAceptar === -1 ? SECCIONES_CARTA.length - 1 : primeraSinAceptar);
       }
-    } else {
-      setRespNombre(familia.tutor_nombre ?? "");
-      setRespCorreo(familia.tutor_email ?? "");
-      setPersonas([{ nombre: "", cedula: "", vinculo: "", telefono: "" }]);
     }
 
     setCargando(false);
@@ -257,16 +251,16 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
     cargar();
   }, [cargar]);
 
-  function actualizarPersona(i: number, campo: keyof Persona, valor: string) {
-    setPersonas((prev) => prev.map((p, idx) => (idx === i ? { ...p, [campo]: valor } : p)));
+  function actualizarResponsable(i: number, campo: keyof Responsable, valor: string) {
+    setResponsables((prev) => prev.map((r, idx) => (idx === i ? { ...r, [campo]: valor } : r)));
   }
 
-  function agregarPersona() {
-    setPersonas((prev) => [...prev, { nombre: "", cedula: "", vinculo: "", telefono: "" }]);
+  function agregarResponsable() {
+    setResponsables((prev) => [...prev, responsableVacio()]);
   }
 
-  function quitarPersona(i: number) {
-    setPersonas((prev) => prev.filter((_, idx) => idx !== i));
+  function quitarResponsable(i: number) {
+    setResponsables((prev) => prev.filter((_, idx) => idx !== i));
   }
 
   async function guardarDatos(e: React.FormEvent) {
@@ -279,13 +273,18 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
       setMensaje("Seleccioná el grado/curso y turno para 2027.");
       return;
     }
-    if (!respVinculo) {
-      setMensaje("Seleccioná el vínculo del/de la responsable con el/la estudiante.");
+    const incompleto = responsables.some(
+      (r) => !r.nombre.trim() || !r.cedula.trim() || !r.vinculo || !r.telefono.trim() || !r.direccion.trim()
+    );
+    if (incompleto) {
+      setMensaje("Completá nombre, cédula, vínculo, teléfono y dirección de cada responsable que agregaste.");
       return;
     }
 
     setGuardando(true);
     setMensaje(null);
+
+    const principal = responsables[0];
 
     const { data: fichaGuardada, error } = await supabase
       .from("fichas_matriculacion")
@@ -301,20 +300,14 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
           grupo_sanguineo: grupoSanguineo.trim() || null,
           enfermedades_alergias: enfermedades.trim() || null,
           discapacidad_apoyo: discapacidad.trim() || null,
-          responsable_nombre: respNombre.trim(),
-          responsable_cedula: respCedula.trim(),
-          responsable_ocupacion: respOcupacion.trim() || null,
-          responsable_vinculo: respVinculo,
-          responsable_vinculo_otro: respVinculo === "otro" ? respVinculoOtro.trim() || null : null,
-          responsable_telefono: respTelefono.trim(),
-          responsable_correo: respCorreo.trim() || null,
-          responsable_direccion: respDireccion.trim(),
-          segundo_contacto_nombre: segNombre.trim() || null,
-          segundo_contacto_vinculo: segVinculo.trim() || null,
-          segundo_contacto_telefono: segTelefono.trim() || null,
-          emergencia_nombre: emerNombre.trim() || null,
-          emergencia_vinculo: emerVinculo.trim() || null,
-          emergencia_telefono: emerTelefono.trim() || null,
+          responsable_nombre: principal.nombre.trim(),
+          responsable_cedula: principal.cedula.trim(),
+          responsable_vinculo: principal.vinculo,
+          responsable_telefono: principal.telefono.trim(),
+          responsable_direccion: principal.direccion.trim(),
+          emergencia_nombre: mostrarEmergencia ? emerNombre.trim() || null : null,
+          emergencia_vinculo: mostrarEmergencia ? emerVinculo.trim() || null : null,
+          emergencia_telefono: mostrarEmergencia ? emerTelefono.trim() || null : null,
         },
         { onConflict: "estudiante_id,anio_lectivo" }
       )
@@ -330,19 +323,20 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
     const f = fichaGuardada as FichaDB;
     setFicha(f);
 
-    await supabase.from("personas_autorizadas_retiro").delete().eq("ficha_id", f.id);
-    const personasValidas = personas.filter((p) => p.nombre.trim());
-    if (personasValidas.length > 0) {
-      await supabase.from("personas_autorizadas_retiro").insert(
-        personasValidas.map((p) => ({
-          ficha_id: f.id,
-          nombre: p.nombre.trim(),
-          cedula: p.cedula.trim() || null,
-          vinculo: p.vinculo.trim() || null,
-          telefono: p.telefono.trim() || null,
-        }))
-      );
-    }
+    await supabase.from("responsables_matriculacion").delete().eq("ficha_id", f.id);
+    await supabase.from("responsables_matriculacion").insert(
+      responsables.map((r, i) => ({
+        ficha_id: f.id,
+        orden: i,
+        nombre: r.nombre.trim(),
+        cedula: r.cedula.trim(),
+        vinculo: r.vinculo,
+        telefono: r.telefono.trim(),
+        direccion: r.direccion.trim(),
+        ocupacion: r.ocupacion.trim() || null,
+        correo: r.correo.trim() || null,
+      }))
+    );
 
     setGuardando(false);
     const primeraSinAceptar = SECCIONES_CARTA.findIndex((s) => !f[CAMPO_POR_LETRA[s.letra]]);
@@ -397,6 +391,7 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
   }
 
   const cursoElegido = cursos.find((c) => c.id === cursoId);
+  const principal = responsables[0];
 
   return (
     <div className="flex flex-col gap-6">
@@ -463,98 +458,95 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
           </div>
 
           <div className="border-t border-border pt-4">
-            <h2 className="font-semibold text-sm mb-3">III. Datos del/de la responsable y contactos</h2>
-            <div className="flex flex-col gap-3">
-              <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-                Nombre y apellido del/de la responsable principal
-                <input required value={respNombre} onChange={(e) => setRespNombre(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
-              </label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-                C.I. N° del/de la responsable
-                <input required value={respCedula} onChange={(e) => setRespCedula(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
-              </label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-                Ocupación
-                <input value={respOcupacion} onChange={(e) => setRespOcupacion(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
-              </label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-                Vínculo con el/la estudiante
-                <select required value={respVinculo} onChange={(e) => setRespVinculo(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card max-w-xs">
-                  <option value="">Seleccionar…</option>
-                  <option value="padre">Padre</option>
-                  <option value="madre">Madre</option>
-                  <option value="tutor">Tutor/a</option>
-                  <option value="encargado">Encargado/a</option>
-                  <option value="otro">Otro</option>
-                </select>
-              </label>
-              {respVinculo === "otro" && (
-                <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-                  Especificar vínculo
-                  <input value={respVinculoOtro} onChange={(e) => setRespVinculoOtro(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
-                </label>
-              )}
-              <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-                Teléfono / WhatsApp
-                <input required value={respTelefono} onChange={(e) => setRespTelefono(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
-              </label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-                Correo electrónico
-                <input type="email" value={respCorreo} onChange={(e) => setRespCorreo(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
-              </label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-                Dirección
-                <input required value={respDireccion} onChange={(e) => setRespDireccion(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
-              </label>
-            </div>
-
-            <div className="grid sm:grid-cols-2 gap-4 mt-4">
-              <div className="flex flex-col gap-2">
-                <span className="text-[13px] font-semibold">Segundo contacto (opcional)</span>
-                <input placeholder="Nombre y apellido" value={segNombre} onChange={(e) => setSegNombre(e.target.value)} className="h-10 rounded-lg border border-border px-3 text-sm bg-card" />
-                <input placeholder="Vínculo" value={segVinculo} onChange={(e) => setSegVinculo(e.target.value)} className="h-10 rounded-lg border border-border px-3 text-sm bg-card" />
-                <input placeholder="Teléfono" value={segTelefono} onChange={(e) => setSegTelefono(e.target.value)} className="h-10 rounded-lg border border-border px-3 text-sm bg-card" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <span className="text-[13px] font-semibold">Contacto de emergencia, si es otra persona (opcional)</span>
-                <input placeholder="Nombre y apellido" value={emerNombre} onChange={(e) => setEmerNombre(e.target.value)} className="h-10 rounded-lg border border-border px-3 text-sm bg-card" />
-                <input placeholder="Vínculo" value={emerVinculo} onChange={(e) => setEmerVinculo(e.target.value)} className="h-10 rounded-lg border border-border px-3 text-sm bg-card" />
-                <input placeholder="Teléfono" value={emerTelefono} onChange={(e) => setEmerTelefono(e.target.value)} className="h-10 rounded-lg border border-border px-3 text-sm bg-card" />
-              </div>
+            <h2 className="font-semibold text-sm mb-1">III. Datos de la madre, el padre y/o el responsable</h2>
+            <p className="text-xs text-text-soft mb-3">Completá al menos uno. Si el/la estudiante no vive con uno de los dos, simplemente no lo agregues.</p>
+            <div className="flex flex-col gap-4">
+              {responsables.map((r, i) => (
+                <div key={i} className="bg-bg rounded-lg p-4 flex flex-col gap-3">
+                  {i > 0 && (
+                    <div className="flex justify-end">
+                      <button type="button" onClick={() => quitarResponsable(i)} className="text-xs text-danger font-semibold">
+                        Quitar
+                      </button>
+                    </div>
+                  )}
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+                      Vínculo con el/la estudiante
+                      <select
+                        required
+                        value={r.vinculo}
+                        onChange={(e) => actualizarResponsable(i, "vinculo", e.target.value)}
+                        className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
+                      >
+                        <option value="">Seleccionar…</option>
+                        <option value="padre">Padre</option>
+                        <option value="madre">Madre</option>
+                        <option value="responsable">Responsable</option>
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+                      Nombre y apellido
+                      <input required value={r.nombre} onChange={(e) => actualizarResponsable(i, "nombre", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+                      C.I. N°
+                      <input required value={r.cedula} onChange={(e) => actualizarResponsable(i, "cedula", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+                      Teléfono/WhatsApp
+                      <input required value={r.telefono} onChange={(e) => actualizarResponsable(i, "telefono", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-[13px] font-medium sm:col-span-2">
+                      Dirección
+                      <input required value={r.direccion} onChange={(e) => actualizarResponsable(i, "direccion", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+                      Ocupación (opcional)
+                      <input value={r.ocupacion} onChange={(e) => actualizarResponsable(i, "ocupacion", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+                      Correo electrónico (opcional)
+                      <input type="email" value={r.correo} onChange={(e) => actualizarResponsable(i, "correo", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
+                    </label>
+                  </div>
+                </div>
+              ))}
+              <button type="button" onClick={agregarResponsable} className="text-xs text-teal font-medium self-start">
+                + Agregar otro responsable
+              </button>
             </div>
           </div>
 
           <div className="border-t border-border pt-4">
-            <h2 className="font-semibold text-sm mb-1">IV. Personas autorizadas a retirar al/a la estudiante</h2>
-            <p className="text-xs text-text-soft mb-3">Agregá una o más personas además de los responsables ya indicados arriba.</p>
-            <div className="flex flex-col gap-3">
-              {personas.map((p, i) => (
-                <div key={i} className="grid sm:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-2 items-end bg-bg rounded-lg p-3">
-                  <label className="flex flex-col gap-1 text-[12px] font-medium">
-                    Nombre y apellido
-                    <input value={p.nombre} onChange={(e) => actualizarPersona(i, "nombre", e.target.value)} className="h-9 rounded-md border border-border px-2 text-sm bg-card" />
-                  </label>
-                  <label className="flex flex-col gap-1 text-[12px] font-medium">
-                    C.I. N°
-                    <input value={p.cedula} onChange={(e) => actualizarPersona(i, "cedula", e.target.value)} className="h-9 rounded-md border border-border px-2 text-sm bg-card" />
-                  </label>
-                  <label className="flex flex-col gap-1 text-[12px] font-medium">
-                    Vínculo
-                    <input value={p.vinculo} onChange={(e) => actualizarPersona(i, "vinculo", e.target.value)} className="h-9 rounded-md border border-border px-2 text-sm bg-card" />
-                  </label>
-                  <label className="flex flex-col gap-1 text-[12px] font-medium">
-                    Teléfono
-                    <input value={p.telefono} onChange={(e) => actualizarPersona(i, "telefono", e.target.value)} className="h-9 rounded-md border border-border px-2 text-sm bg-card" />
-                  </label>
-                  <button type="button" onClick={() => quitarPersona(i)} className="h-9 px-3 rounded-md border border-border text-xs font-semibold">
+            {!mostrarEmergencia ? (
+              <button type="button" onClick={() => setMostrarEmergencia(true)} className="text-xs text-teal font-medium">
+                + Agregar contacto de emergencia (opcional)
+              </button>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="font-semibold text-sm">Contacto de emergencia (opcional)</h2>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMostrarEmergencia(false);
+                      setEmerNombre("");
+                      setEmerVinculo("");
+                      setEmerTelefono("");
+                    }}
+                    className="text-xs text-danger font-semibold"
+                  >
                     Quitar
                   </button>
                 </div>
-              ))}
-              <button type="button" onClick={agregarPersona} className="text-xs text-teal font-medium self-start">
-                + Agregar otra persona
-              </button>
-            </div>
+                <div className="grid sm:grid-cols-3 gap-2">
+                  <input placeholder="Nombre y apellido" value={emerNombre} onChange={(e) => setEmerNombre(e.target.value)} className="h-10 rounded-lg border border-border px-3 text-sm bg-card" />
+                  <input placeholder="Vínculo" value={emerVinculo} onChange={(e) => setEmerVinculo(e.target.value)} className="h-10 rounded-lg border border-border px-3 text-sm bg-card" />
+                  <input placeholder="Teléfono" value={emerTelefono} onChange={(e) => setEmerTelefono(e.target.value)} className="h-10 rounded-lg border border-border px-3 text-sm bg-card" />
+                </div>
+              </>
+            )}
           </div>
 
           {mensaje && <div className="text-sm text-text-soft bg-bg rounded-lg px-3 py-2">{mensaje}</div>}
@@ -576,20 +568,12 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
             </button>
           </div>
 
-          {cartaIndex === 0 && (
+          {cartaIndex === 0 && principal && (
             <div className="bg-bg rounded-lg p-4 text-sm leading-relaxed">
-              Señor/a Director/a: Yo, <strong>{respNombre || "____________________"}</strong>, con C.I. N°{" "}
-              <strong>{respCedula || "____________"}</strong>, en calidad de{" "}
+              Señor/a Director/a: Yo, <strong>{principal.nombre || "____________________"}</strong>, con C.I. N°{" "}
+              <strong>{principal.cedula || "____________"}</strong>, en calidad de{" "}
               <strong>
-                {respVinculo === "padre"
-                  ? "Padre"
-                  : respVinculo === "madre"
-                  ? "Madre"
-                  : respVinculo === "tutor"
-                  ? "Tutor/a"
-                  : respVinculo === "encargado"
-                  ? "Encargado/a"
-                  : respVinculoOtro || "—"}
+                {principal.vinculo === "padre" ? "Padre" : principal.vinculo === "madre" ? "Madre" : principal.vinculo === "responsable" ? "Responsable" : "—"}
               </strong>{" "}
               del/de la estudiante <strong>{estudiante?.nombre_completo}</strong>, con C.I. N°{" "}
               <strong>{estudiante?.cedula ?? "—"}</strong>, matriculado/a en el{" "}
