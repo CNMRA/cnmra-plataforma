@@ -1,9 +1,11 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import BotonImprimir from "@/components/BotonImprimir";
 
 const ANIO_LECTIVO = 2027;
 
 type Seccion = { letra: string; titulo: string; puntos: string[]; campo: string };
+type Responsable = { nombre: string; cedula: string; vinculo: string; telefono: string; direccion: string; ocupacion: string | null; correo: string | null };
 
 const SECCIONES_CARTA: Seccion[] = [
   {
@@ -24,7 +26,7 @@ const SECCIONES_CARTA: Seccion[] = [
     puntos: [
       "Asegurar la asistencia regular y puntual, con llegada 10 minutos antes del inicio para la formación general, y la permanencia del/de la estudiante durante toda la jornada.",
       "Justificar toda ausencia dentro de las 24 horas, sabiendo que tres llegadas tardías equivalen a un día de ausencia y que las ausencias en días de examen deben justificarse el mismo día.",
-      "Retirar anticipadamente al/a la estudiante solo de forma personal (o por un adulto autorizado en el punto IV de este formulario), registrando la salida en Secretaría. No se aceptarán retiros por llamada telefónica.",
+      "Retirar anticipadamente al/a la estudiante solo de forma personal, registrando la salida en Secretaría. No se aceptarán retiros por llamada telefónica.",
     ],
   },
   {
@@ -71,7 +73,7 @@ const SECCIONES_CARTA: Seccion[] = [
     titulo: "Autorización de uso de imágenes",
     campo: "carta_g_aceptada_en",
     puntos: [
-      "Con la firma del presente formulario, autorizo a la institución a tomar fotografías y videos del/de la estudiante durante el desarrollo de las actividades escolares y de investigación, y a utilizarlos en documentos de seguimiento, sistematización, investigación y difusión institucional, siempre con fines educativos y académicos, y respetando su dignidad (Ley N° 7.593/2025).",
+      "Con la firma del presente formulario, autorizo a la institución a tomar fotografías y videos del/de la estudiante durante el desarrollo de las actividades escolares, y a utilizarlos en documentos de seguimiento, sistematización y difusión institucional, siempre con fines educativos y académicos, y respetando su dignidad (Ley N° 7.593/2025).",
       "Asimismo, manifestamos nuestra conformidad de que, ante el incumplimiento de cualquiera de los compromisos asumidos o de lo establecido en las Normas de Convivencia, respetaremos las medidas y decisiones adoptadas por las instancias institucionales correspondientes, conforme al procedimiento formativo y restaurativo previsto en dichas normas.",
     ],
   },
@@ -83,18 +85,16 @@ function formatearFecha(iso: string | null) {
   return d.toLocaleString("es-PY", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function etiquetaVinculo(f: { responsable_vinculo: string | null; responsable_vinculo_otro: string | null }) {
-  switch (f.responsable_vinculo) {
+function etiquetaVinculo(v: string) {
+  switch (v) {
     case "padre":
       return "Padre";
     case "madre":
       return "Madre";
-    case "tutor":
-      return "Tutor/a";
-    case "encargado":
-      return "Encargado/a";
+    case "responsable":
+      return "Responsable";
     default:
-      return f.responsable_vinculo_otro || "—";
+      return v || "—";
   }
 }
 
@@ -138,10 +138,31 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
     ? await supabase.from("cursos").select("grado, turno, enfasis").eq("id", ficha.curso_id).maybeSingle()
     : { data: null };
 
-  const { data: personas } = await supabase
-    .from("personas_autorizadas_retiro")
-    .select("nombre, cedula, vinculo, telefono")
-    .eq("ficha_id", ficha.id);
+  const { data: responsablesData } = await supabase
+    .from("responsables_matriculacion")
+    .select("nombre, cedula, vinculo, telefono, direccion, ocupacion, correo")
+    .eq("ficha_id", ficha.id)
+    .order("orden");
+
+  const responsables: Responsable[] = responsablesData && responsablesData.length > 0
+    ? responsablesData
+    : [
+        {
+          nombre: ficha.responsable_nombre ?? "—",
+          cedula: ficha.responsable_cedula ?? "—",
+          vinculo: ficha.responsable_vinculo ?? "",
+          telefono: ficha.responsable_telefono ?? "—",
+          direccion: ficha.responsable_direccion ?? "—",
+          ocupacion: null,
+          correo: null,
+        },
+      ];
+
+  const principal = responsables[0];
+  const sujeto = responsables.length > 1 ? "Nosotros" : "Yo";
+  const nombres = responsables.map((r) => r.nombre).join(" y ");
+  const cedulas = responsables.map((r) => r.cedula).join(" y ");
+  const vinculos = responsables.map((r) => etiquetaVinculo(r.vinculo)).join(" y ");
 
   return (
     <div className="bg-white text-[#141413]">
@@ -162,24 +183,16 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
         .doc .aceptado { font-size: 11px; color: #1E7A47; font-weight: 600; margin-top: 6px; }
         .doc ul { margin: 6px 0; padding-left: 20px; }
         .doc li { margin-bottom: 5px; }
+        .doc .bloque-responsable { margin-bottom: 10px; }
+        .doc .bloque-responsable .etiqueta { font-weight: 600; margin-bottom: 2px; }
       `}</style>
 
       <div className="no-imprimir sticky top-0 bg-[#F7F7F5] border-b border-[#E5E3DD] px-5 py-3 flex items-center justify-between">
         <a href={`/familia/matriculacion-2027/${estudianteId}`} className="text-sm text-teal font-medium">
           ← Volver
         </a>
-        <button
-          id="btn-imprimir"
-          className="h-10 px-5 rounded-lg bg-navy text-white font-semibold text-sm"
-        >
-          Imprimir / Descargar PDF
-        </button>
+        <BotonImprimir />
       </div>
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `document.getElementById('btn-imprimir').addEventListener('click', function(){ window.print(); });`,
-        }}
-      />
 
       <div className="doc">
         <div style={{ textAlign: "center", marginBottom: 18 }}>
@@ -208,9 +221,7 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
           </tr>
           <tr>
             <td className="campo">Grado/Curso y turno 2027</td>
-            <td>
-              {curso ? `${curso.grado}${curso.enfasis ? ` — ${curso.enfasis}` : ""} — Turno ${curso.turno}` : "—"}
-            </td>
+            <td>{curso ? `${curso.grado}${curso.enfasis ? ` — ${curso.enfasis}` : ""} — Turno ${curso.turno}` : "—"}</td>
           </tr>
           <tr>
             <td className="campo">Nacionalidad</td>
@@ -227,13 +238,7 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
           <tr>
             <td className="campo">Cobertura médica</td>
             <td>
-              {ficha.cobertura_medica === "ips"
-                ? "IPS"
-                : ficha.cobertura_medica === "privado"
-                ? "Seguro privado"
-                : ficha.cobertura_medica === "ninguna"
-                ? "Ninguna"
-                : "—"}
+              {ficha.cobertura_medica === "ips" ? "IPS" : ficha.cobertura_medica === "privado" ? "Seguro privado" : ficha.cobertura_medica === "ninguna" ? "Ninguna" : "—"}
             </td>
           </tr>
           <tr>
@@ -250,76 +255,57 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
           </tr>
         </table>
 
-        <h2>III. Datos del/de la responsable y contactos</h2>
-        <table>
-          <tr>
-            <td className="campo">Nombre y apellido</td>
-            <td>{ficha.responsable_nombre}</td>
-          </tr>
-          <tr>
-            <td className="campo">C.I. N°</td>
-            <td>{ficha.responsable_cedula}</td>
-          </tr>
-          <tr>
-            <td className="campo">Vínculo con el/la estudiante</td>
-            <td>{etiquetaVinculo(ficha)}</td>
-          </tr>
-          <tr>
-            <td className="campo">Ocupación</td>
-            <td>{ficha.responsable_ocupacion ?? "—"}</td>
-          </tr>
-          <tr>
-            <td className="campo">Teléfono/WhatsApp</td>
-            <td>{ficha.responsable_telefono}</td>
-          </tr>
-          <tr>
-            <td className="campo">Correo electrónico</td>
-            <td>{ficha.responsable_correo ?? "—"}</td>
-          </tr>
-          <tr>
-            <td className="campo">Dirección</td>
-            <td>{ficha.responsable_direccion}</td>
-          </tr>
-          {(ficha.segundo_contacto_nombre || ficha.segundo_contacto_telefono) && (
-            <tr>
-              <td className="campo">Segundo contacto</td>
-              <td>
-                {ficha.segundo_contacto_nombre ?? "—"} {ficha.segundo_contacto_vinculo ? `(${ficha.segundo_contacto_vinculo})` : ""} ·{" "}
-                {ficha.segundo_contacto_telefono ?? "—"}
-              </td>
-            </tr>
-          )}
-          {(ficha.emergencia_nombre || ficha.emergencia_telefono) && (
-            <tr>
-              <td className="campo">Contacto de emergencia</td>
-              <td>
-                {ficha.emergencia_nombre ?? "—"} {ficha.emergencia_vinculo ? `(${ficha.emergencia_vinculo})` : ""} ·{" "}
-                {ficha.emergencia_telefono ?? "—"}
-              </td>
-            </tr>
-          )}
-        </table>
-
-        <h2>IV. Personas adultas autorizadas a retirar al/a la estudiante</h2>
-        {personas && personas.length > 0 ? (
-          <table>
-            <tr style={{ fontWeight: 600 }}>
-              <td>Nombre y apellido</td>
-              <td>C.I. N°</td>
-              <td>Vínculo</td>
-              <td>Teléfono</td>
-            </tr>
-            {personas.map((p, i) => (
-              <tr key={i}>
-                <td>{p.nombre}</td>
-                <td>{p.cedula ?? "—"}</td>
-                <td>{p.vinculo ?? "—"}</td>
-                <td>{p.telefono ?? "—"}</td>
+        <h2>III. Datos de la madre, el padre y/o el responsable</h2>
+        {responsables.map((r, i) => (
+          <div key={i} className="bloque-responsable">
+            <div className="etiqueta">{etiquetaVinculo(r.vinculo)}</div>
+            <table>
+              <tr>
+                <td className="campo">Nombre y apellido</td>
+                <td>{r.nombre}</td>
               </tr>
-            ))}
-          </table>
-        ) : (
-          <p style={{ color: "#4A4A47" }}>No se indicaron personas adicionales autorizadas.</p>
+              <tr>
+                <td className="campo">C.I. N°</td>
+                <td>{r.cedula}</td>
+              </tr>
+              <tr>
+                <td className="campo">Ocupación</td>
+                <td>{r.ocupacion ?? "—"}</td>
+              </tr>
+              <tr>
+                <td className="campo">Teléfono/WhatsApp</td>
+                <td>{r.telefono}</td>
+              </tr>
+              <tr>
+                <td className="campo">Correo electrónico</td>
+                <td>{r.correo ?? "—"}</td>
+              </tr>
+              <tr>
+                <td className="campo">Dirección</td>
+                <td>{r.direccion}</td>
+              </tr>
+            </table>
+          </div>
+        ))}
+
+        {ficha.emergencia_nombre && (
+          <>
+            <h2>IV. Contacto de emergencia</h2>
+            <table>
+              <tr>
+                <td className="campo">Nombre y apellido</td>
+                <td>{ficha.emergencia_nombre}</td>
+              </tr>
+              <tr>
+                <td className="campo">Vínculo</td>
+                <td>{ficha.emergencia_vinculo ?? "—"}</td>
+              </tr>
+              <tr>
+                <td className="campo">Teléfono</td>
+                <td>{ficha.emergencia_telefono ?? "—"}</td>
+              </tr>
+            </table>
+          </>
         )}
 
         <div style={{ pageBreakBefore: "always" as React.CSSProperties["pageBreakBefore"] }} />
@@ -330,12 +316,12 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
 
         <p>
           Mariano Roque Alonso, {new Date(ficha.completado_en!).toLocaleDateString("es-PY", { day: "2-digit", month: "long", year: "numeric" })}.
-          Señor/a Director/a: Yo, <strong>{ficha.responsable_nombre}</strong>, con C.I. N° <strong>{ficha.responsable_cedula}</strong>, en
-          calidad de <strong>{etiquetaVinculo(ficha)}</strong> del/de la estudiante <strong>{estudiante!.nombre_completo}</strong>, con C.I. N°{" "}
+          Señor/a Director/a: {sujeto}, <strong>{nombres}</strong>, con C.I. N° <strong>{cedulas}</strong>, en calidad de{" "}
+          <strong>{vinculos}</strong> del/de la estudiante <strong>{estudiante!.nombre_completo}</strong>, con C.I. N°{" "}
           <strong>{estudiante!.cedula ?? "—"}</strong>, matriculado/a en el{" "}
           <strong>{curso ? `${curso.grado}${curso.enfasis ? ` — ${curso.enfasis}` : ""}` : "—"}</strong>, turno{" "}
-          <strong>{curso?.turno ?? "—"}</strong>, declaro haber recibido y conocer las Normas de Convivencia del Colegio Nacional Mariano
-          Roque Alonso y, junto con mi hijo/a o representado/a, nos comprometemos a:
+          <strong>{curso?.turno ?? "—"}</strong>, declaro/declaramos haber recibido y conocer las Normas de Convivencia del
+          Colegio Nacional Mariano Roque Alonso y, junto con nuestro/a hijo/a o representado/a, nos comprometemos a:
         </p>
 
         {SECCIONES_CARTA.map((s) => (
@@ -364,12 +350,8 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
         </ul>
 
         <div className="firma">
-          <div className="linea">Firma del padre/madre/tutor/a</div>
-          <div className="linea">Firma del padre/madre/tutor/a (2do responsable, si corresponde)</div>
-        </div>
-        <div className="firma">
+          <div className="linea">Firma del padre, madre, tutor/a o responsable</div>
           <div className="linea">Firma del/de la estudiante</div>
-          <div className="linea">Aclaración y C.I. de quien firma</div>
         </div>
       </div>
     </div>
