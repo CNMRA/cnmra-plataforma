@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import BotonImprimir from "@/components/BotonImprimir";
+import ConfirmarCompromiso from "@/components/ConfirmarCompromiso";
 
 const ANIO_LECTIVO = 2027;
 
@@ -134,6 +135,18 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
     notFound();
   }
 
+  if (!ficha.confirmacion_final_en) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center p-5">
+        <ConfirmarCompromiso
+          fichaId={ficha.id}
+          estudianteNombre={estudiante!.nombre_completo}
+          volverHref={`/familia/matriculacion-2027/${estudianteId}`}
+        />
+      </div>
+    );
+  }
+
   const { data: curso } = ficha.curso_id
     ? await supabase.from("cursos").select("grado, turno, enfasis").eq("id", ficha.curso_id).maybeSingle()
     : { data: null };
@@ -158,7 +171,6 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
         },
       ];
 
-  const principal = responsables[0];
   const sujeto = responsables.length > 1 ? "Nosotros" : "Yo";
   const nombres = responsables.map((r) => r.nombre).join(" y ");
   const cedulas = responsables.map((r) => r.cedula).join(" y ");
@@ -185,6 +197,7 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
         .doc li { margin-bottom: 5px; }
         .doc .bloque-responsable { margin-bottom: 10px; }
         .doc .bloque-responsable .etiqueta { font-weight: 600; margin-bottom: 2px; }
+        .doc .confirmacion-final { background: #E6F4EC; border: 1px solid #BFE3CB; border-radius: 8px; padding: 10px 14px; margin: 16px 0; font-size: 12px; font-weight: 600; color: #1E7A47; }
       `}</style>
 
       <div className="no-imprimir sticky top-0 bg-[#F7F7F5] border-b border-[#E5E3DD] px-5 py-3 flex items-center justify-between">
@@ -339,6 +352,11 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
             </div>
           </div>
         ))}
+
+        <div className="confirmacion-final">
+          ✓ Confirmación final: &quot;Estoy de acuerdo con todo el compromiso asumido&quot; — {nombres}, firmado el{" "}
+          {formatearFecha(ficha.confirmacion_final_en)}.
+        </div>
 
         <h2>Documentos que debe entregar junto con este formulario</h2>
         <ul>
