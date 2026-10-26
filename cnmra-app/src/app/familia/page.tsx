@@ -16,13 +16,6 @@ type Boton = {
 
 const BOTONES_GRANDES: Boton[] = [
   {
-    href: "/familia/inscripcion",
-    icono: "📝",
-    titulo: "Inscripción",
-    descripcion: "Inscribir a un hijo/a nuevo",
-    color: "bg-[#EAF0FF] border-[#C9D8FF]",
-  },
-  {
     href: "/familia/asistencia",
     icono: "📅",
     titulo: "Asistencia",
@@ -67,7 +60,7 @@ const BOTON_MATRICULACION_2027: Boton = {
   href: "/familia/matriculacion-2027",
   icono: "🖊️",
   titulo: "Matriculación 2027",
-  descripcion: "Ficha y Carta de Compromiso",
+  descripcion: "Inscripción, ficha y Carta de Compromiso",
   color: "bg-[#F3EAFF] border-[#DFC9FF]",
 };
 
@@ -165,9 +158,7 @@ export default async function FamiliaInicio() {
     };
   }
 
-  const botones: Boton[] = familia?.matriculacion_2027_habilitada
-    ? [...BOTONES_GRANDES, BOTON_MATRICULACION_2027]
-    : BOTONES_GRANDES;
+  const destacado = familia?.matriculacion_2027_habilitada ? BOTON_MATRICULACION_2027 : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -193,8 +184,22 @@ export default async function FamiliaInicio() {
 
       <div>
         <h2 className="text-[13px] font-semibold text-text-soft uppercase tracking-wide mb-3">¿Qué necesitás hacer?</h2>
+
+        {destacado && (
+          <Link
+            href={destacado.href}
+            className={`${destacado.color} border rounded-2xl p-5 flex items-center gap-4 hover:opacity-85 active:scale-[0.98] transition mb-3`}
+          >
+            <span className="text-4xl leading-none">{destacado.icono}</span>
+            <div className="flex flex-col text-left">
+              <span className="font-display font-bold text-base">{destacado.titulo}</span>
+              <span className="text-xs text-text-soft">{destacado.descripcion}</span>
+            </div>
+          </Link>
+        )}
+
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {botones.map((b) => {
+          {BOTONES_GRANDES.map((b) => {
             const cantidad = b.seccion ? notificaciones[b.seccion] : 0;
             return (
               <Link
@@ -240,7 +245,7 @@ export default async function FamiliaInicio() {
 
       {(!estudiantes || estudiantes.length === 0) && (
         <div className="bg-card border border-border rounded-xl p-5 text-sm text-text-soft">
-          Todavía no tenés hijos/as cargados en tu cuenta. Usá el botón &quot;Inscripción&quot; de abajo para empezar.
+          Todavía no tenés hijos/as cargados en tu cuenta.
         </div>
       )}
     </div>
