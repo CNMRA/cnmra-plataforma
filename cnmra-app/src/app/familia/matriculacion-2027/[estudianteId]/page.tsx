@@ -46,6 +46,7 @@ type FichaDB = {
   carta_f_aceptada_en: string | null;
   carta_g_aceptada_en: string | null;
   completado_en: string | null;
+  confirmacion_final_en: string | null;
 };
 
 type Seccion = { letra: string; titulo: string; puntos: string[] };
@@ -337,6 +338,24 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
         correo: r.correo.trim() || null,
       }))
     );
+
+    // Crea la inscripción pendiente para 2027 si todavía no existe, así aparece
+    // en el panel de la institución para que le asignen sección y la matriculen.
+    const { data: inscripcionExistente } = await supabase
+      .from("inscripciones")
+      .select("id")
+      .eq("estudiante_id", estudianteId)
+      .eq("anio_lectivo", ANIO_LECTIVO)
+      .maybeSingle();
+
+    if (!inscripcionExistente) {
+      await supabase.from("inscripciones").insert({
+        estudiante_id: estudianteId,
+        curso_solicitado_id: cursoId || null,
+        anio_lectivo: ANIO_LECTIVO,
+        estado: "pendiente",
+      });
+    }
 
     setGuardando(false);
     const primeraSinAceptar = SECCIONES_CARTA.findIndex((s) => !f[CAMPO_POR_LETRA[s.letra]]);
