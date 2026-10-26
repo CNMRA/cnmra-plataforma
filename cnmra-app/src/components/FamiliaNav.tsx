@@ -13,6 +13,7 @@ const links = [
   { href: "/familia/notas", label: "Notas" },
   { href: "/familia/anotaciones", label: "Anotaciones" },
   { href: "/familia/avisos", label: "Avisos" },
+  { href: "/familia/matriculacion-2027", label: "Matriculación 2027" },
 ];
 
 export default function FamiliaNav({ nombre }: { nombre: string }) {
