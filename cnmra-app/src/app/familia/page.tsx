@@ -5,14 +5,16 @@ import NotificacionesFamilia from "@/components/NotificacionesFamilia";
 const SECCIONES = ["avisos", "notas", "asistencia", "anotaciones"] as const;
 type Seccion = (typeof SECCIONES)[number];
 
-const BOTONES_GRANDES: {
+type Boton = {
   href: string;
   icono: string;
   titulo: string;
   descripcion: string;
   color: string;
   seccion?: Seccion;
-}[] = [
+};
+
+const BOTONES_GRANDES: Boton[] = [
   {
     href: "/familia/inscripcion",
     icono: "📝",
@@ -61,6 +63,14 @@ const BOTONES_GRANDES: {
   },
 ];
 
+const BOTON_MATRICULACION_2027: Boton = {
+  href: "/familia/matriculacion-2027",
+  icono: "🖊️",
+  titulo: "Matriculación 2027",
+  descripcion: "Ficha y Carta de Compromiso",
+  color: "bg-[#F3EAFF] border-[#DFC9FF]",
+};
+
 export default async function FamiliaInicio() {
   const supabase = await createClient();
   const {
@@ -69,7 +79,7 @@ export default async function FamiliaInicio() {
 
   const { data: familia } = await supabase
     .from("familias")
-    .select("id, tutor_nombre")
+    .select("id, tutor_nombre, matriculacion_2027_habilitada")
     .eq("tutor_perfil_id", user!.id)
     .maybeSingle();
 
@@ -155,6 +165,10 @@ export default async function FamiliaInicio() {
     };
   }
 
+  const botones: Boton[] = familia?.matriculacion_2027_habilitada
+    ? [...BOTONES_GRANDES, BOTON_MATRICULACION_2027]
+    : BOTONES_GRANDES;
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -180,7 +194,7 @@ export default async function FamiliaInicio() {
       <div>
         <h2 className="text-[13px] font-semibold text-text-soft uppercase tracking-wide mb-3">¿Qué necesitás hacer?</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {BOTONES_GRANDES.map((b) => {
+          {botones.map((b) => {
             const cantidad = b.seccion ? notificaciones[b.seccion] : 0;
             return (
               <Link
