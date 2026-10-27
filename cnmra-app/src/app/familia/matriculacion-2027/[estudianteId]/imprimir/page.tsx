@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import BotonImprimir from "@/components/BotonImprimir";
 import ConfirmarCompromiso from "@/components/ConfirmarCompromiso";
+import EncabezadoDocumento from "@/components/EncabezadoDocumento";
 
 const ANIO_LECTIVO = 2027;
 
@@ -176,28 +177,31 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
   const cedulas = responsables.map((r) => r.cedula).join(" y ");
   const vinculos = responsables.map((r) => etiquetaVinculo(r.vinculo)).join(" y ");
 
+  const cursoTexto = curso ? `${curso.grado}${curso.enfasis ? ` — ${curso.enfasis}` : ""} — Turno ${curso.turno}` : "—";
+  const tituloFormulario = ficha.tramite === "primera_vez" ? "FORMULARIO DE MATRICULACIÓN" : "FORMULARIO DE CONFIRMACIÓN DE MATRÍCULA";
+
   return (
     <div className="bg-white text-[#141413]">
       <style>{`
         @media print {
           .no-imprimir { display: none !important; }
           body { background: #fff; }
-          @page { margin: 18mm 15mm; }
+          @page { size: 216mm 330mm; margin: 13mm 12mm; }
         }
-        .doc { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; font-size: 12.5px; line-height: 1.5; max-width: 820px; margin: 0 auto; padding: 24px 20px 60px; }
-        .doc h1 { font-size: 16px; margin: 0; }
-        .doc h2 { font-size: 13.5px; margin: 18px 0 8px; border-bottom: 1px solid #141413; padding-bottom: 3px; }
-        .doc table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
-        .doc td { padding: 3px 6px; vertical-align: top; }
+        .doc { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; font-size: 12px; line-height: 1.42; max-width: 820px; margin: 0 auto; padding: 24px 20px 50px; }
+        .doc h2 { font-size: 13px; margin: 13px 0 6px; border-bottom: 1px solid #141413; padding-bottom: 3px; }
+        .doc table { width: 100%; border-collapse: collapse; margin-bottom: 3px; }
+        .doc td { padding: 2px 6px; vertical-align: top; }
         .doc .campo { color: #4A4A47; width: 190px; }
-        .doc .firma { margin-top: 36px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
-        .doc .linea { border-top: 1px solid #141413; margin-top: 46px; padding-top: 4px; font-size: 11px; text-align: center; }
-        .doc .aceptado { font-size: 11px; color: #1E7A47; font-weight: 600; margin-top: 6px; }
-        .doc ul { margin: 6px 0; padding-left: 20px; }
-        .doc li { margin-bottom: 5px; }
-        .doc .bloque-responsable { margin-bottom: 10px; }
+        .doc .firma { margin-top: 26px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+        .doc .linea { border-top: 1px solid #141413; margin-top: 36px; padding-top: 4px; font-size: 11px; text-align: center; }
+        .doc .aceptado { font-size: 10.5px; color: #1E7A47; font-weight: 600; margin-top: 4px; }
+        .doc ul { margin: 4px 0; padding-left: 20px; }
+        .doc li { margin-bottom: 3px; }
+        .doc .bloque-responsable { margin-bottom: 8px; }
         .doc .bloque-responsable .etiqueta { font-weight: 600; margin-bottom: 2px; }
-        .doc .confirmacion-final { background: #E6F4EC; border: 1px solid #BFE3CB; border-radius: 8px; padding: 10px 14px; margin: 16px 0; font-size: 12px; font-weight: 600; color: #1E7A47; }
+        .doc .confirmacion-final { background: #E6F4EC; border: 1px solid #BFE3CB; border-radius: 8px; padding: 10px 14px; margin: 14px 0; font-size: 12px; font-weight: 600; color: #1E7A47; }
+        .doc .separador-carta { margin-top: 24px; padding-top: 14px; border-top: 2px solid #141413; }
       `}</style>
 
       <div className="no-imprimir sticky top-0 bg-[#F7F7F5] border-b border-[#E5E3DD] px-5 py-3 flex items-center justify-between">
@@ -208,15 +212,15 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
       </div>
 
       <div className="doc">
-        <div style={{ textAlign: "center", marginBottom: 18 }}>
-          <h1>COLEGIO NACIONAL MARIANO ROQUE ALONSO</h1>
-          <div style={{ fontSize: 11, color: "#4A4A47", marginTop: 2 }}>
-            Código Institucional 27534 · Área Educativa 11-55 · Departamento Central
-          </div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginTop: 10 }}>
-            FICHA INDIVIDUAL DE MATRICULACIÓN DEL/DE LA ESTUDIANTE — AÑO LECTIVO 2027
-          </div>
-        </div>
+        <EncabezadoDocumento
+          titulo={tituloFormulario}
+          datos={[
+            { label: "Estudiante", value: estudiante!.nombre_completo },
+            { label: "Cédula", value: estudiante!.cedula ?? "—" },
+            { label: "Curso 2027", value: cursoTexto },
+            { label: "Año lectivo", value: "2027" },
+          ]}
+        />
 
         <h2>I. Datos del/de la estudiante</h2>
         <table>
@@ -234,7 +238,7 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
           </tr>
           <tr>
             <td className="campo">Grado/Curso y turno 2027</td>
-            <td>{curso ? `${curso.grado}${curso.enfasis ? ` — ${curso.enfasis}` : ""} — Turno ${curso.turno}` : "—"}</td>
+            <td>{cursoTexto}</td>
           </tr>
           <tr>
             <td className="campo">Nacionalidad</td>
@@ -321,10 +325,15 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
           </>
         )}
 
-        <div style={{ pageBreakBefore: "always" as React.CSSProperties["pageBreakBefore"] }} />
-
-        <div style={{ textAlign: "center", margin: "10px 0 16px" }}>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>CARTA DE COMPROMISO</div>
+        <div className="separador-carta">
+          <EncabezadoDocumento
+            titulo="ACUERDO DE COMPROMISO"
+            datos={[
+              { label: "Estudiante", value: estudiante!.nombre_completo },
+              { label: "Curso 2027", value: cursoTexto },
+              { label: "Fecha", value: formatearFecha(ficha.completado_en) },
+            ]}
+          />
         </div>
 
         <p>
