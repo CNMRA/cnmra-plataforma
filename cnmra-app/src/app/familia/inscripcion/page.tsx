@@ -2,12 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { ANIO_LECTIVO_ACTIVO } from "@/lib/anio-lectivo";
 
 type Curso = { id: string; grado: string; turno: string; enfasis: string | null };
 type Candidato = { estudianteId: string; nombre: string };
-
-const ANIO_ACTUAL = new Date().getFullYear();
-const ANIOS_LECTIVOS = [ANIO_ACTUAL, ANIO_ACTUAL + 1];
 
 function normalizar(texto: string) {
   return texto
@@ -31,7 +29,6 @@ export default function InscripcionFamilia() {
   const [sinCedula, setSinCedula] = useState(false);
   const [fechaNacimiento, setFechaNacimiento] = useState("");
   const [cursoId, setCursoId] = useState("");
-  const [anioLectivo, setAnioLectivo] = useState(String(ANIO_ACTUAL));
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [candidato, setCandidato] = useState<Candidato | null>(null);
@@ -150,7 +147,7 @@ export default function InscripcionFamilia() {
     await supabase.from("inscripciones").insert({
       estudiante_id: estudiante.id,
       curso_solicitado_id: cursoId || null,
-      anio_lectivo: Number(anioLectivo),
+      anio_lectivo: ANIO_LECTIVO_ACTIVO,
       estado: "pendiente",
     });
 
@@ -161,7 +158,6 @@ export default function InscripcionFamilia() {
     setSinCedula(false);
     setFechaNacimiento("");
     setCursoId("");
-    setAnioLectivo(String(ANIO_ACTUAL));
     setGuardando(false);
   }
 
@@ -202,7 +198,6 @@ export default function InscripcionFamilia() {
     setSinCedula(false);
     setFechaNacimiento("");
     setCursoId("");
-    setAnioLectivo(String(ANIO_ACTUAL));
   }
 
   function noEsElMismo() {
@@ -216,7 +211,10 @@ export default function InscripcionFamilia() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="font-display text-2xl">Inscripción</h1>
-        <p className="text-sm text-text-soft mt-1">Sumá a otro hijo/a a tu cuenta familiar.</p>
+        <p className="text-sm text-text-soft mt-1">
+          Sumá a otro hijo/a a tu cuenta familiar para el año lectivo {ANIO_LECTIVO_ACTIVO}. ¿Querés matricular a tu
+          hijo/a para 2027? Usá &quot;Matriculación 2027&quot; en el menú.
+        </p>
       </div>
 
       <form onSubmit={enviar} className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
@@ -274,21 +272,6 @@ export default function InscripcionFamilia() {
         <label className="flex flex-col gap-1.5 text-[13px] font-medium">
           Fecha de nacimiento
           <input type="date" value={fechaNacimiento} onChange={(e) => setFechaNacimiento(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
-        </label>
-        <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-          Año lectivo
-          <select
-            required
-            value={anioLectivo}
-            onChange={(e) => setAnioLectivo(e.target.value)}
-            className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
-          >
-            {ANIOS_LECTIVOS.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
         </label>
         <label className="flex flex-col gap-1.5 text-[13px] font-medium">
           Curso al que postula
