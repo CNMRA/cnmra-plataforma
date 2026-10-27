@@ -331,6 +331,7 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
           <EncabezadoDocumento
             titulo="ACUERDO DE COMPROMISO"
             datos={[
+              { label: "Año lectivo", value: "2027" },
               { label: "Estudiante", value: estudiante!.nombre_completo },
               { label: "Curso 2027", value: cursoTexto },
               { label: "Fecha", value: formatearFecha(ficha.completado_en) },
