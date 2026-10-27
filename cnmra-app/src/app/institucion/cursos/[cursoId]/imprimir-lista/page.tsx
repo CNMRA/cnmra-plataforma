@@ -68,6 +68,7 @@ export default function ImprimirListaPage({ params }: { params: Promise<{ cursoI
         <EncabezadoDocumento
           titulo="LISTA DE ESTUDIANTES"
           datos={[
+            { label: "Año lectivo", value: String(ANIO_LECTIVO_ACTIVO) },
             { label: "Curso/Grado", value: curso?.grado ?? "" },
             { label: "Turno", value: curso ? etiquetaTurno[curso.turno] ?? curso.turno : "" },
             { label: "Énfasis", value: curso?.enfasis ?? "—" },
