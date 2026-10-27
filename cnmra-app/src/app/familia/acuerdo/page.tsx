@@ -11,8 +11,6 @@ type Fila = {
   cartaConfirmadaEn: string | null;
 };
 
-const ANIO_MATRICULACION = 2027;
-
 function formatearFecha(iso: string) {
   const d = new Date(iso);
   return d.toLocaleString("es-PY", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -45,7 +43,6 @@ export default function AcuerdoFamilia() {
     const { data: fichas } = await supabase
       .from("fichas_matriculacion")
       .select("estudiante_id, confirmacion_final_en")
-      .eq("anio_lectivo", ANIO_MATRICULACION)
       .in("estudiante_id", (estudiantes ?? []).map((e) => e.id));
 
     const cartaPorEstudiante = new Map((fichas ?? []).map((f) => [f.estudiante_id, f.confirmacion_final_en]));
