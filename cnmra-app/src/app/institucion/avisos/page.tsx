@@ -230,3 +230,117 @@ export default function AvisosInstitucion() {
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+            Título
+            <select
+              required
+              value={tituloElegido}
+              onChange={(e) => {
+                setTituloElegido(e.target.value);
+                if (e.target.value !== "Otros") setTituloOtro("");
+              }}
+              className="h-11 rounded-lg border border-border px-3 text-sm bg-card min-w-[220px]"
+            >
+              <option value="">Seleccionar…</option>
+              {TITULOS_PREESTABLECIDOS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {tituloElegido === "Otros" && (
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium flex-1">
+              Especificar título
+              <input
+                required
+                value={tituloOtro}
+                onChange={(e) => setTituloOtro(e.target.value)}
+                className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
+              />
+            </label>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+            Fecha
+            <input
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+            Hora
+            <input
+              type="time"
+              value={hora}
+              onChange={(e) => setHora(e.target.value)}
+              className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium flex-1">
+            Lugar
+            <input
+              value={lugar}
+              onChange={(e) => setLugar(e.target.value)}
+              className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
+            />
+          </label>
+        </div>
+
+        <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+          Mensaje
+          <textarea
+            required
+            value={contenido}
+            onChange={(e) => setContenido(e.target.value)}
+            className="rounded-lg border border-border px-3 py-2 text-sm bg-card min-h-24"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+          Imagen (opcional)
+          <input type="file" accept="image/*" onChange={(e) => setImagen(e.target.files?.[0] ?? null)} className="text-sm" />
+        </label>
+
+        {mensaje && <div className="text-sm text-text-soft bg-bg rounded-lg px-3 py-2">{mensaje}</div>}
+
+        <button disabled={guardando} className="h-11 rounded-lg bg-navy text-white font-semibold text-sm w-fit px-6 disabled:opacity-60">
+          {guardando ? "Publicando…" : "Publicar aviso"}
+        </button>
+      </form>
+
+      <div>
+        <h2 className="text-[13px] font-semibold text-text-soft uppercase tracking-wide mb-3">Historial — {anio}</h2>
+        <div className="flex flex-col gap-3">
+          {avisos.length === 0 && <p className="text-sm text-text-soft">Todavía no se publicó ningún aviso para el {anio}.</p>}
+          {avisos.map((a) => (
+            <div key={a.id} className="bg-card border border-border rounded-xl p-4 flex flex-col gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-semibold px-2 py-1 rounded-full bg-[#EAF0FF] text-navy">
+                  {ETIQUETA_NIVEL[a.nivel]}
+                  {a.nivel === "curso" && a.cursos ? ` · ${a.cursos.grado}${a.cursos.enfasis ? ` — ${a.cursos.enfasis}` : ""}` : ""}
+                  {a.nivel === "estudiante" && a.estudiantes ? ` · ${a.estudiantes.nombre_completo}` : ""}
+                </span>
+                <span className="text-xs text-text-soft">{new Date(a.creado_en).toLocaleString("es-PY")}</span>
+              </div>
+              <div className="font-semibold text-sm">{a.titulo}</div>
+              <div className="text-xs text-text-soft">
+                {a.fecha ?? "Sin fecha"} {a.hora ? `· ${a.hora}` : ""} {a.lugar ? `· ${a.lugar}` : ""}
+              </div>
+              <p className="text-sm">{a.contenido}</p>
+              {a.imagen_url && (
+                // eslint-disable-next-line @next/next/no-img-element -- imagen subida por el usuario a Supabase Storage, no es un asset del proyecto
+                <img src={a.imagen_url} alt="" className="rounded-lg max-h-48 object-contain border border-border" />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
