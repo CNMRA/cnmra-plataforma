@@ -642,3 +642,46 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
           )}
 
           <div>
+            <h2 className="font-display text-xl mb-3">
+              {SECCIONES_CARTA[cartaIndex].letra}. {SECCIONES_CARTA[cartaIndex].titulo}
+            </h2>
+            <ul className="flex flex-col gap-3 list-disc pl-5 text-sm leading-relaxed">
+              {SECCIONES_CARTA[cartaIndex].puntos.map((p, i) => (
+                <li key={i}>{p}</li>
+              ))}
+            </ul>
+          </div>
+
+          {mensaje && <div className="text-sm text-text-soft bg-bg rounded-lg px-3 py-2">{mensaje}</div>}
+
+          <button
+            onClick={aceptarSeccion}
+            disabled={guardando}
+            className="h-11 rounded-lg bg-navy text-white font-semibold text-sm w-fit px-6 disabled:opacity-60"
+          >
+            {guardando ? "Guardando…" : "Lo he leído, lo comprendo y lo acepto"}
+          </button>
+        </div>
+      )}
+
+      {paso === "listo" && (
+        <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
+          <p className="text-sm">
+            Completaste los datos y aceptaste los 7 puntos de la Carta de Compromiso para {estudiante?.nombre_completo}.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Link
+              href={`/familia/matriculacion-2027/${estudianteId}/imprimir`}
+              className="h-11 rounded-lg bg-navy text-white font-semibold text-sm px-6 flex items-center justify-center"
+            >
+              Ver documento para imprimir
+            </Link>
+            <button type="button" onClick={() => setPaso("datos")} className="h-11 rounded-lg border border-border font-semibold text-sm px-6">
+              Editar mis datos
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
