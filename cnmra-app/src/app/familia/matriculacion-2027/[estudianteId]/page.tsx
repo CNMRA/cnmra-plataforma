@@ -126,6 +126,12 @@ const CAMPO_POR_LETRA: Record<string, keyof FichaDB> = {
   G: "carta_g_aceptada_en",
 };
 
+const ETIQUETA_TURNO: Record<string, string> = {
+  mañana: "Turno mañana",
+  tarde: "Turno tarde",
+  noche: "Turno noche",
+};
+
 function responsableVacio(): Responsable {
   return { nombre: "", cedula: "", vinculo: "", telefono: "", direccion: "", ocupacion: "", correo: "" };
 }
@@ -147,6 +153,7 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
   const [mensaje, setMensaje] = useState<string | null>(null);
 
   const [tramite, setTramite] = useState("");
+  const [turnoElegido, setTurnoElegido] = useState("");
   const [cursoId, setCursoId] = useState("");
   const [nacionalidad, setNacionalidad] = useState("Paraguaya");
   const [puebloIndigena, setPuebloIndigena] = useState("");
@@ -201,6 +208,10 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
       setFicha(f);
       setTramite(f.tramite ?? "");
       setCursoId(f.curso_id ?? "");
+
+      const cursoDeLaFicha = (cursosData ?? []).find((c) => c.id === f.curso_id);
+      setTurnoElegido(cursoDeLaFicha?.turno ?? "");
+
       setNacionalidad(f.nacionalidad ?? "Paraguaya");
       setPuebloIndigena(f.pueblo_indigena ?? "");
       setCoberturaMedica(f.cobertura_medica ?? "");
@@ -252,6 +263,11 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
     cargar();
   }, [cargar]);
 
+  function elegirTurno(turno: string) {
+    setTurnoElegido(turno);
+    setCursoId("");
+  }
+
   function actualizarResponsable(i: number, campo: keyof Responsable, valor: string) {
     setResponsables((prev) => prev.map((r, idx) => (idx === i ? { ...r, [campo]: valor } : r)));
   }
@@ -270,8 +286,12 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
       setMensaje("Seleccioná el tipo de trámite.");
       return;
     }
+    if (!turnoElegido) {
+      setMensaje("Seleccioná el turno (mañana o tarde).");
+      return;
+    }
     if (!cursoId) {
-      setMensaje("Seleccioná el grado/curso y turno para 2027.");
+      setMensaje("Seleccioná el grado/curso para 2027.");
       return;
     }
     const incompleto = responsables.some(
@@ -409,6 +429,8 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
     );
   }
 
+  const turnosDisponibles = Array.from(new Set(cursos.map((c) => c.turno)));
+  const cursosDelTurno = cursos.filter((c) => c.turno === turnoElegido);
   const cursoElegido = cursos.find((c) => c.id === cursoId);
   const principal = responsables[0];
 
@@ -437,17 +459,31 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
             </div>
           </div>
 
-          <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-            Grado/Curso 2027 y turno
-            <select required value={cursoId} onChange={(e) => setCursoId(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card">
-              <option value="">Seleccionar…</option>
-              {cursos.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.grado} {c.enfasis ? `— ${c.enfasis}` : ""} — Turno {c.turno}
-                </option>
+          <div>
+            <h2 className="font-semibold text-sm mb-2">Turno</h2>
+            <div className="flex flex-col gap-2 sm:flex-row sm:gap-4">
+              {turnosDisponibles.map((turno) => (
+                <label key={turno} className="flex items-center gap-2 text-sm">
+                  <input type="radio" name="turno" checked={turnoElegido === turno} onChange={() => elegirTurno(turno)} />
+                  {ETIQUETA_TURNO[turno] ?? turno}
+                </label>
               ))}
-            </select>
-          </label>
+            </div>
+          </div>
+
+          {turnoElegido && (
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+              Grado/Curso 2027
+              <select required value={cursoId} onChange={(e) => setCursoId(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card">
+                <option value="">Seleccionar…</option>
+                {cursosDelTurno.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.grado} {c.enfasis ? `— ${c.enfasis}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <div className="border-t border-border pt-4">
             <h2 className="font-semibold text-sm mb-3">II. Salud y necesidades de apoyo</h2>
@@ -606,46 +642,3 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
           )}
 
           <div>
-            <h2 className="font-display text-xl mb-3">
-              {SECCIONES_CARTA[cartaIndex].letra}. {SECCIONES_CARTA[cartaIndex].titulo}
-            </h2>
-            <ul className="flex flex-col gap-3 list-disc pl-5 text-sm leading-relaxed">
-              {SECCIONES_CARTA[cartaIndex].puntos.map((p, i) => (
-                <li key={i}>{p}</li>
-              ))}
-            </ul>
-          </div>
-
-          {mensaje && <div className="text-sm text-text-soft bg-bg rounded-lg px-3 py-2">{mensaje}</div>}
-
-          <button
-            onClick={aceptarSeccion}
-            disabled={guardando}
-            className="h-11 rounded-lg bg-navy text-white font-semibold text-sm w-fit px-6 disabled:opacity-60"
-          >
-            {guardando ? "Guardando…" : "Lo he leído, lo comprendo y lo acepto"}
-          </button>
-        </div>
-      )}
-
-      {paso === "listo" && (
-        <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
-          <p className="text-sm">
-            Completaste los datos y aceptaste los 7 puntos de la Carta de Compromiso para {estudiante?.nombre_completo}.
-          </p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Link
-              href={`/familia/matriculacion-2027/${estudianteId}/imprimir`}
-              className="h-11 rounded-lg bg-navy text-white font-semibold text-sm px-6 flex items-center justify-center"
-            >
-              Ver documento para imprimir
-            </Link>
-            <button type="button" onClick={() => setPaso("datos")} className="h-11 rounded-lg border border-border font-semibold text-sm px-6">
-              Editar mis datos
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
