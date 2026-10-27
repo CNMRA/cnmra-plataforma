@@ -1,21 +1,20 @@
 "use client";
 
-import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import {
-  type Instancia,
-  type NotasPorInstancia,
-  ETIQUETA_INSTANCIA,
-  evaluarMateria,
-} from "@/lib/calificaciones";
 import EncabezadoDocumento from "@/components/EncabezadoDocumento";
 import { ANIO_LECTIVO_ACTIVO } from "@/lib/anio-lectivo";
 
 type Curso = { id: string; grado: string; turno: string; ciclo: string; enfasis: string | null };
-type Estudiante = { id: string; nombre_completo: string; cedula: string | null };
-type Disciplina = { id: string; nombre: string; orden: number; plan: string };
-type CalifRow = { disciplina_id: string; instancia: Instancia; nota: number | null };
+type Estudiante = { id: string; nombre_completo: string };
+type Registro = {
+  id: string;
+  fecha: string;
+  categoria: string;
+  descripcion: string;
+  disciplinas: { nombre: string } | null;
+};
 
 const etiquetaTurno: Record<string, string> = {
   mañana: "Turno mañana",
@@ -23,20 +22,19 @@ const etiquetaTurno: Record<string, string> = {
   noche: "Turno noche",
 };
 
-const etiquetaPlan: Record<string, string> = {
-  comun: "Plan Común",
-  especifico: "Plan Específico",
-  optativo: "Plan Optativo",
+const etiquetaCategoria: Record<string, string> = {
+  positivo: "Positivo",
+  atencion: "A tener en cuenta",
+  conducta: "Conducta",
 };
 
-export default function LibretaCalificacionesPage({ params }: { params: Promise<{ cursoId: string; estudianteId: string }> }) {
+export default function InformeAnecdoticoPage({ params }: { params: Promise<{ cursoId: string; estudianteId: string }> }) {
   const { cursoId, estudianteId } = use(params);
   const supabase = createClient();
 
   const [curso, setCurso] = useState<Curso | null>(null);
   const [estudiante, setEstudiante] = useState<Estudiante | null>(null);
-  const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
-  const [califs, setCalifs] = useState<CalifRow[]>([]);
+  const [registros, setRegistros] = useState<Registro[]>([]);
   const [cargando, setCargando] = useState(true);
 
   const cargar = useCallback(async () => {
@@ -49,25 +47,17 @@ export default function LibretaCalificacionesPage({ params }: { params: Promise<
 
     const { data: estudianteData } = await supabase
       .from("estudiantes")
-      .select("id, nombre_completo, cedula")
+      .select("id, nombre_completo")
       .eq("id", estudianteId)
       .single();
     setEstudiante(estudianteData ?? null);
 
-    const { data: disciplinasData } = await supabase
-      .from("disciplinas")
-      .select("id, nombre, orden, plan")
-      .eq("curso_id", cursoId)
-      .order("plan")
-      .order("orden");
-    setDisciplinas(disciplinasData ?? []);
-
-    const { data: califsData } = await supabase
-      .from("calificaciones")
-      .select("disciplina_id, instancia, nota")
-      .eq("estudiante_id", estudianteId);
-    setCalifs((califsData as unknown as CalifRow[]) ?? []);
-
+    const { data: registrosData } = await supabase
+      .from("registros_anecdoticos")
+      .select("id, fecha, categoria, descripcion, disciplinas(nombre)")
+      .eq("estudiante_id", estudianteId)
+      .order("fecha", { ascending: false });
+    setRegistros((registrosData as unknown as Registro[]) ?? []);
     setCargando(false);
   }, [cursoId, estudianteId, supabase]);
 
@@ -75,33 +65,6 @@ export default function LibretaCalificacionesPage({ params }: { params: Promise<
     // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos desde Supabase
     cargar();
   }, [cargar]);
-
-  const notasPorDisciplina = useMemo(() => {
-    const mapa = new Map<string, NotasPorInstancia>();
-    califs.forEach((c) => {
-      if (c.nota === null) return;
-      const actual = mapa.get(c.disciplina_id) ?? {};
-      actual[c.instancia] = c.nota;
-      mapa.set(c.disciplina_id, actual);
-    });
-    return mapa;
-  }, [califs]);
-
-  const filas = useMemo(() => {
-    return disciplinas.map((d) => {
-      const notas = notasPorDisciplina.get(d.id) ?? {};
-      const resultado = curso ? evaluarMateria(notas, curso.grado) : null;
-      return { disciplina: d, notas, resultado };
-    });
-  }, [disciplinas, notasPorDisciplina, curso]);
-
-  const esEEB = curso?.ciclo === "Tercer Ciclo EEB";
-
-  const totalPuntos = filas.reduce((suma, f) => suma + (f.notas.ordinaria ?? 0), 0);
-  const cantidadConNota = filas.filter((f) => f.notas.ordinaria !== undefined).length;
-  const terminoMedio = cantidadConNota > 0 ? (totalPuntos / cantidadConNota).toFixed(1) : null;
-  const todasCargadas = filas.length > 0 && filas.every((f) => f.resultado !== null);
-  const todasAprobadas = todasCargadas && filas.every((f) => f.resultado?.aprobado);
 
   if (cargando) return <p className="text-sm text-text-soft">Cargando…</p>;
 
@@ -118,81 +81,27 @@ export default function LibretaCalificacionesPage({ params }: { params: Promise<
 
       <div className="bg-card border border-border rounded-xl p-6">
         <EncabezadoDocumento
-          titulo={esEEB ? "BOLETÍN DE CALIFICACIONES" : "BOLETÍN DE CALIFICACIONES DE BACHILLERATO CIENTÍFICO"}
+          titulo="REGISTRO ANECDÓTICO"
           datos={[
             { label: "Año lectivo", value: String(ANIO_LECTIVO_ACTIVO) },
             { label: "Estudiante", value: estudiante?.nombre_completo ?? "" },
-            { label: "Cédula", value: estudiante?.cedula ?? "—" },
             { label: "Curso/Grado", value: curso?.grado ?? "" },
             { label: "Turno", value: curso ? etiquetaTurno[curso.turno] ?? curso.turno : "" },
-            { label: "Ciclo", value: curso?.ciclo ?? "" },
             { label: "Énfasis", value: curso?.enfasis ?? "—" },
           ]}
         />
 
-        <table className="text-xs border-collapse w-full">
-          <thead>
-            <tr>
-              {!esEEB && <th className="text-left py-1.5 pr-2 border-b border-border font-medium">Plan</th>}
-              <th className="text-left py-1.5 pr-2 border-b border-border font-medium">{esEEB ? "Áreas" : "Disciplinas"}</th>
-              <th className="text-center py-1.5 px-2 border-b border-border font-medium">1ª Etapa</th>
-              <th className="text-center py-1.5 px-2 border-b border-border font-medium">2ª Etapa</th>
-              <th className="text-center py-1.5 px-2 border-b border-border font-medium">Calificación Final</th>
-              <th className="text-center py-1.5 px-2 border-b border-border font-medium">Complementario</th>
-              <th className="text-center py-1.5 px-2 border-b border-border font-medium">Regularización</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filas.map(({ disciplina, notas }) => (
-              <tr key={disciplina.id}>
-                {!esEEB && <td className="py-1.5 pr-2 border-b border-border text-text-soft">{etiquetaPlan[disciplina.plan] ?? disciplina.plan}</td>}
-                <td className="py-1.5 pr-2 border-b border-border">{disciplina.nombre}</td>
-                <td className="text-center py-1.5 px-2 border-b border-border">{notas.etapa1 ?? ""}</td>
-                <td className="text-center py-1.5 px-2 border-b border-border">{notas.etapa2 ?? ""}</td>
-                <td className="text-center py-1.5 px-2 border-b border-border font-semibold">{notas.ordinaria ?? ""}</td>
-                <td className="text-center py-1.5 px-2 border-b border-border">{notas.complementario ?? ""}</td>
-                <td className="text-center py-1.5 px-2 border-b border-border">{notas.regularizacion ?? ""}</td>
-              </tr>
-            ))}
-            {filas.length === 0 && (
-              <tr>
-                <td className="py-3 text-text-soft" colSpan={esEEB ? 6 : 7}>
-                  Este curso todavía no tiene materias cargadas.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-
-        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs border-t border-border pt-3">
-          <div>
-            <span className="text-text-soft">Total de puntos: </span>
-            <span className="font-semibold">{cantidadConNota > 0 ? totalPuntos : "—"}</span>
-          </div>
-          <div>
-            <span className="text-text-soft">Término medio general: </span>
-            <span className="font-semibold">{terminoMedio ?? "—"}</span>
-          </div>
-          <div>
-            <span className="text-text-soft">Promovido/a: </span>
-            <span className="font-semibold">{todasCargadas ? (todasAprobadas ? "SÍ" : "NO") : "Pendiente"}</span>
-          </div>
-        </div>
-
-        {!esEEB && filas.some((f) => f.resultado && !f.resultado.aprobado) && (
-          <div className="mt-3 text-xs">
-            <span className="font-semibold">Área(s) y/o disciplina(s) a regularizar: </span>
-            {filas
-              .filter((f) => f.resultado && !f.resultado.aprobado)
-              .map((f) => f.disciplina.nombre)
-              .join(", ")}
-          </div>
-        )}
-
-        <div className="mt-10 grid grid-cols-3 gap-6 text-xs text-center">
-          <div className="border-t border-border pt-1.5">Firma de Secretario/a</div>
-          <div className="border-t border-border pt-1.5">Firma del Padre/Madre</div>
-          <div className="border-t border-border pt-1.5">Firma del Director/a</div>
+        <div className="flex flex-col gap-3">
+          {registros.map((r) => (
+            <div key={r.id} className="border-b border-border pb-2.5">
+              <div className="text-xs text-text-soft">
+                {r.fecha} · {etiquetaCategoria[r.categoria] ?? r.categoria}
+                {r.disciplinas?.nombre ? ` · ${r.disciplinas.nombre}` : " · General"}
+              </div>
+              <div className="text-sm mt-0.5">{r.descripcion}</div>
+            </div>
+          ))}
+          {registros.length === 0 && <p className="text-sm text-text-soft">Sin registros cargados todavía.</p>}
         </div>
       </div>
     </div>
