@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useAnioLectivo, ANIO_LECTIVO_ACTIVO } from "@/lib/anio-lectivo";
 
 type Seccion = { id: string; nombre: string };
 type Curso = { id: string; grado: string; turno: string; ciclo: string; enfasis: string | null; secciones: Seccion[] };
@@ -12,15 +13,14 @@ type InscripcionFila = {
   estudiante_id: string;
   curso_solicitado_id: string | null;
   anio_lectivo: number | null;
+  seccion_asignada_id: string | null;
   estudiantes: { nombre_completo: string } | null;
   cursos: { id: string; grado: string; turno: string } | null;
 };
 
-const ANIO_ACTUAL = new Date().getFullYear();
-const ANIOS_LECTIVOS = [ANIO_ACTUAL - 1, ANIO_ACTUAL, ANIO_ACTUAL + 1, ANIO_ACTUAL + 2, ANIO_ACTUAL + 3];
-
 export default function InscripcionInstitucional() {
   const supabase = createClient();
+  const { anio, anios } = useAnioLectivo();
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [pendientes, setPendientes] = useState<InscripcionFila[]>([]);
   const [guardando, setGuardando] = useState(false);
@@ -35,12 +35,16 @@ export default function InscripcionInstitucional() {
   const [estudianteNombre, setEstudianteNombre] = useState("");
   const [fechaNacimiento, setFechaNacimiento] = useState("");
   const [cursoId, setCursoId] = useState("");
-  const [anioLectivo, setAnioLectivo] = useState(String(ANIO_ACTUAL));
+  const [anioLectivo, setAnioLectivo] = useState(String(anio));
 
   const [seccionSeleccionada, setSeccionSeleccionada] = useState<Record<string, string>>({});
   const [nuevaSeccionNombre, setNuevaSeccionNombre] = useState<Record<string, string>>({});
   const [mostrarNuevaSeccion, setMostrarNuevaSeccion] = useState<Record<string, boolean>>({});
   const [procesando, setProcesando] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAnioLectivo(String(anio));
+  }, [anio]);
 
   const cargar = useCallback(async () => {
     const { data: cursosData } = await supabase
@@ -51,11 +55,14 @@ export default function InscripcionInstitucional() {
 
     const { data: inscripcionesData } = await supabase
       .from("inscripciones")
-      .select("id, estado, creado_en, estudiante_id, curso_solicitado_id, anio_lectivo, estudiantes(nombre_completo), cursos(id, grado, turno)")
+      .select(
+        "id, estado, creado_en, estudiante_id, curso_solicitado_id, anio_lectivo, seccion_asignada_id, estudiantes(nombre_completo), cursos(id, grado, turno)"
+      )
+      .eq("anio_lectivo", anio)
       .order("creado_en", { ascending: false })
       .limit(15);
     setPendientes((inscripcionesData as unknown as InscripcionFila[]) ?? []);
-  }, [supabase]);
+  }, [supabase, anio]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos desde Supabase
@@ -135,7 +142,7 @@ export default function InscripcionInstitucional() {
     setEstudianteNombre("");
     setFechaNacimiento("");
     setCursoId("");
-    setAnioLectivo(String(ANIO_ACTUAL));
+    setAnioLectivo(String(anio));
     setGuardando(false);
     cargar();
   }
@@ -144,7 +151,16 @@ export default function InscripcionInstitucional() {
     const seccionId = seccionSeleccionada[fila.id];
     if (!seccionId) return;
     setProcesando(fila.id);
-    await supabase.from("estudiantes").update({ seccion_id: seccionId }).eq("id", fila.estudiante_id);
+
+    if (fila.anio_lectivo === ANIO_LECTIVO_ACTIVO) {
+      // Año activo (2026 mientras dure): se asigna la sección real del estudiante, como siempre.
+      await supabase.from("estudiantes").update({ seccion_id: seccionId }).eq("id", fila.estudiante_id);
+    } else {
+      // Año futuro (2027): no se toca la sección actual del estudiante. Se guarda aparte,
+      // lista para el día del pase de año oficial.
+      await supabase.from("inscripciones").update({ seccion_asignada_id: seccionId }).eq("id", fila.id);
+    }
+
     await supabase.from("inscripciones").update({ estado: "aprobada" }).eq("id", fila.id);
     setProcesando(null);
     cargar();
@@ -191,13 +207,17 @@ export default function InscripcionInstitucional() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
+      <div className="flex items-center gap-2.5 flex-wrap">
         <h1 className="font-display text-2xl">Inscripción</h1>
-        <p className="text-sm text-text-soft mt-1">
-          Si la cédula del tutor ya existe, el estudiante se vincula automáticamente
-          a esa familia (para hermanos).
-        </p>
+        <span className="text-xs font-bold text-white bg-navy px-2.5 py-1 rounded-full">Año {anio}</span>
       </div>
+
+      {anio !== ANIO_LECTIVO_ACTIVO && (
+        <div className="bg-[#EAF0FF] border border-[#C9D8FF] rounded-lg p-3.5 text-[13px] text-navy leading-relaxed">
+          Estás viendo las inscripciones pendientes del <strong>{anio}</strong>. Si matriculás a alguien acá, no se
+          toca su sección actual — queda guardado aparte, listo para cuando hagamos el pase de año oficial.
+        </div>
+      )}
 
       <form onSubmit={guardar} className="bg-card border border-border rounded-xl p-5 grid md:grid-cols-2 gap-4">
         <Campo label="Cédula del tutor" value={tutorCedula} onChange={setTutorCedula} required />
@@ -221,7 +241,7 @@ export default function InscripcionInstitucional() {
             onChange={(e) => setAnioLectivo(e.target.value)}
             className="h-11 w-full rounded-lg border border-border px-3 text-sm bg-card"
           >
-            {ANIOS_LECTIVOS.map((a) => (
+            {anios.map((a) => (
               <option key={a} value={a}>
                 {a}
               </option>
@@ -257,7 +277,7 @@ export default function InscripcionInstitucional() {
       </form>
 
       <div className="bg-card border border-border rounded-xl p-5">
-        <h3 className="font-display text-lg mb-1">Últimas inscripciones</h3>
+        <h3 className="font-display text-lg mb-1">Últimas inscripciones — {anio}</h3>
         <p className="text-xs text-text-soft mb-3">
           Las inscripciones pendientes necesitan que les asignes una sección para
           quedar matriculadas y aparecer en Calificaciones y Seguimiento.
@@ -395,7 +415,7 @@ export default function InscripcionInstitucional() {
               </div>
             );
           })}
-          {pendientes.length === 0 && <p className="text-sm text-text-soft">Todavía no hay inscripciones cargadas.</p>}
+          {pendientes.length === 0 && <p className="text-sm text-text-soft">Todavía no hay inscripciones cargadas para el {anio}.</p>}
         </div>
       </div>
     </div>
