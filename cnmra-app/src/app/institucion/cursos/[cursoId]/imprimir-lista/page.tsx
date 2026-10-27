@@ -4,6 +4,7 @@ import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import EncabezadoDocumento from "@/components/EncabezadoDocumento";
+import { ANIO_LECTIVO_ACTIVO } from "@/lib/anio-lectivo";
 
 type Curso = { id: string; grado: string; turno: string; ciclo: string; enfasis: string | null };
 type Estudiante = { id: string; nombre_completo: string; cedula: string | null };
