@@ -141,6 +141,7 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
       <div className="min-h-[70vh] flex items-center justify-center p-5">
         <ConfirmarCompromiso
           fichaId={ficha.id}
+          estudianteId={estudianteId}
           estudianteNombre={estudiante!.nombre_completo}
           volverHref={`/familia/matriculacion-2027/${estudianteId}`}
         />
