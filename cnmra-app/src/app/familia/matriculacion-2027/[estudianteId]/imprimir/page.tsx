@@ -202,6 +202,7 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
         .doc .bloque-responsable .etiqueta { font-weight: 600; margin-bottom: 2px; }
         .doc .confirmacion-final { background: #E6F4EC; border: 1px solid #BFE3CB; border-radius: 8px; padding: 10px 14px; margin: 14px 0; font-size: 12px; font-weight: 600; color: #1E7A47; }
         .doc .separador-carta { margin-top: 24px; padding-top: 14px; border-top: 2px solid #141413; }
+@media print { .separador-carta { break-before: page; } }
       `}</style>
 
       <div className="no-imprimir sticky top-0 bg-[#F7F7F5] border-b border-[#E5E3DD] px-5 py-3 flex items-center justify-between">
