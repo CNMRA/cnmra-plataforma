@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useAnioLectivo } from "@/lib/anio-lectivo";
 
 const links = [
   { href: "/institucion", label: "Panel" },
@@ -25,6 +26,7 @@ export default function InstitucionSidebar({
   const router = useRouter();
   const supabase = createClient();
   const [abierto, setAbierto] = useState(false);
+  const { anio, setAnio, anios } = useAnioLectivo();
 
   async function salir() {
     await supabase.auth.signOut();
@@ -37,6 +39,25 @@ export default function InstitucionSidebar({
     .slice(0, 2)
     .join("")
     .toUpperCase();
+
+  const selectorAnio = (
+    <div className="flex flex-col gap-1.5 px-1">
+      <span className="text-[10px] uppercase tracking-wide font-semibold text-white/45">Año lectivo</span>
+      <div className="flex bg-white/10 rounded-lg p-0.5 gap-0.5">
+        {anios.map((a) => (
+          <button
+            key={a}
+            onClick={() => setAnio(a)}
+            className={`flex-1 text-center py-1.5 rounded-md text-xs font-semibold transition ${
+              anio === a ? "bg-teal text-navy-dark" : "text-white/55 hover:text-white"
+            }`}
+          >
+            {a}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
   const navLinks = (onClick?: () => void) => (
     <nav className="flex flex-col gap-0.5">
@@ -77,42 +98,47 @@ export default function InstitucionSidebar({
 
   return (
     <>
-            <div className="hidden md:flex print:hidden flex-none w-[220px] bg-navy-dark p-4 flex-col gap-7 text-white">
+      <div className="hidden md:flex print:hidden flex-none w-[220px] bg-navy-dark p-4 flex-col gap-6 text-white">
         <div className="flex items-center gap-2.5 px-1">
           <Image src="/logo.jpg" alt="CNMRA" width={32} height={32} className="rounded object-contain" />
           <span className="font-display font-bold text-sm">CNMRA</span>
         </div>
+        {selectorAnio}
         {navLinks()}
         {perfilBox}
       </div>
 
-          <div className="md:hidden print:hidden flex-none bg-navy-dark text-white">
+      <div className="md:hidden print:hidden flex-none bg-navy-dark text-white">
         <div className="h-14 flex items-center justify-between px-4">
           <div className="flex items-center gap-2.5">
             <Image src="/logo.jpg" alt="CNMRA" width={28} height={28} className="rounded object-contain" />
             <span className="font-display font-bold text-sm">CNMRA</span>
           </div>
-          <button
-            onClick={() => setAbierto((v) => !v)}
-            aria-label="Abrir menú"
-            className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-white/10"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              {abierto ? (
-                <path d="M6 6l12 12M18 6L6 18" />
-              ) : (
-                <>
-                  <path d="M3 6h18" />
-                  <path d="M3 12h18" />
-                  <path d="M3 18h18" />
-                </>
-              )}
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold bg-teal text-navy-dark px-2.5 py-1 rounded-full">{anio}</span>
+            <button
+              onClick={() => setAbierto((v) => !v)}
+              aria-label="Abrir menú"
+              className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-white/10"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                {abierto ? (
+                  <path d="M6 6l12 12M18 6L6 18" />
+                ) : (
+                  <>
+                    <path d="M3 6h18" />
+                    <path d="M3 12h18" />
+                    <path d="M3 18h18" />
+                  </>
+                )}
+              </svg>
+            </button>
+          </div>
         </div>
 
         {abierto && (
           <div className="px-4 pb-4 flex flex-col gap-5 border-t border-white/10 pt-3">
+            {selectorAnio}
             {navLinks(() => setAbierto(false))}
             {perfilBox}
           </div>
