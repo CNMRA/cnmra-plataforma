@@ -160,6 +160,8 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
     const diaSemana = new Date(anio, mesNum - 1, d).getDay();
     return diaSemana !== 0 && diaSemana !== 6; // se excluyen sábados y domingos
   });
+
+  const esInicioDeSemana = (d: number) => new Date(anio, mesNum - 1, d).getDay() === 1 && d !== dias[0];
   const nombreMes = new Date(anio, mesNum - 1, 1).toLocaleDateString("es-PY", { month: "long", year: "numeric" });
 
   async function agregarDiaSinClase(e: React.FormEvent) {
@@ -361,7 +363,11 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
                 Estudiante
               </th>
               {dias.map((d) => (
-                <th key={d} className="text-center py-1 border-b border-border font-medium" style={{ width: "24px" }}>
+                <th
+                  key={d}
+                  className={`text-center py-1 border-b border-border font-medium ${esInicioDeSemana(d) ? "border-l-2 border-l-text-soft" : ""}`}
+                  style={{ width: "24px" }}
+                >
                   {d}
                   {sinClaseMapa.has(d) && <span className="text-danger">*</span>}
                 </th>
@@ -396,7 +402,10 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
                     {e.nombre_completo}
                   </td>
                   {dias.map((d) => (
-                    <td key={d} className="text-center py-1 border-b border-border">
+                    <td
+                      key={d}
+                      className={`text-center py-1 border-b border-border ${esInicioDeSemana(d) ? "border-l-2 border-l-text-soft" : ""}`}
+                    >
                       {sinClaseMapa.has(d) ? "" : fila?.get(d) ?? ""}
                     </td>
                   ))}
