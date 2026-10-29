@@ -156,7 +156,10 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
     return m;
   }, [diasSinClase]);
 
-  const dias = Array.from({ length: diasDelMes }, (_, i) => i + 1);
+  const dias = Array.from({ length: diasDelMes }, (_, i) => i + 1).filter((d) => {
+    const diaSemana = new Date(anio, mesNum - 1, d).getDay();
+    return diaSemana !== 0 && diaSemana !== 6; // se excluyen sábados y domingos
+  });
   const nombreMes = new Date(anio, mesNum - 1, 1).toLocaleDateString("es-PY", { month: "long", year: "numeric" });
 
   async function agregarDiaSinClase(e: React.FormEvent) {
@@ -351,22 +354,22 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
           ]}
         />
 
-        <table className="border-collapse w-full" style={{ fontSize: "9px" }}>
+        <table className="border-collapse w-full" style={{ fontSize: "11px" }}>
           <thead>
             <tr>
               <th className="text-left py-1 pr-2 border-b border-border sticky left-0 bg-card whitespace-nowrap">
                 Estudiante
               </th>
               {dias.map((d) => (
-                <th key={d} className="text-center py-1 border-b border-border font-medium" style={{ width: "16px" }}>
+                <th key={d} className="text-center py-1 border-b border-border font-medium" style={{ width: "20px" }}>
                   {d}
                   {sinClaseMapa.has(d) && <span className="text-danger">*</span>}
                 </th>
               ))}
-              <th className="text-center py-1 px-1 border-b border-border font-semibold">A</th>
-              <th className="text-center py-1 px-1 border-b border-border font-semibold">T</th>
-              <th className="text-center py-1 px-1 border-b border-border font-semibold">%</th>
-              <th className="text-left py-1 px-1 border-b border-border font-semibold">Sit.</th>
+              <th className="text-center py-1 px-1 border-b border-border font-semibold" style={{ fontSize: "9px" }}>A</th>
+              <th className="text-center py-1 px-1 border-b border-border font-semibold" style={{ fontSize: "9px" }}>T</th>
+              <th className="text-center py-1 px-1 border-b border-border font-semibold" style={{ fontSize: "9px" }}>%</th>
+              <th className="text-left py-1 px-1 border-b border-border font-semibold" style={{ fontSize: "9px" }}>Situación</th>
             </tr>
           </thead>
           <tbody>
@@ -397,12 +400,12 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
                       {sinClaseMapa.has(d) ? "" : fila?.get(d) ?? ""}
                     </td>
                   ))}
-                  <td className="text-center py-1 px-1 border-b border-border font-semibold text-danger">{ausencias || ""}</td>
-                  <td className="text-center py-1 px-1 border-b border-border font-semibold text-warning">{tardanzas || ""}</td>
-                  <td className="text-center py-1 px-1 border-b border-border font-semibold">
+                  <td className="text-center py-1 px-1 border-b border-border font-semibold text-danger" style={{ fontSize: "9px" }}>{ausencias || ""}</td>
+                  <td className="text-center py-1 px-1 border-b border-border font-semibold text-warning" style={{ fontSize: "9px" }}>{tardanzas || ""}</td>
+                  <td className="text-center py-1 px-1 border-b border-border font-semibold" style={{ fontSize: "9px" }}>
                     {pct === null ? "—" : `${Math.round(pct)}%`}
                   </td>
-                  <td className={`text-left py-1 px-1 border-b border-border whitespace-nowrap ${situacion.claseTexto}`}>
+                  <td className={`text-left py-1 px-1 border-b border-border whitespace-nowrap ${situacion.claseTexto}`} style={{ fontSize: "9px" }}>
                     {situacion.etiqueta}
                   </td>
                 </tr>
