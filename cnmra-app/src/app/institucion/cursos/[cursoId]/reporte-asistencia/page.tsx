@@ -37,12 +37,20 @@ function mesActualISO() {
 
 function calcularSituacion(pct: number | null): Situacion {
   if (pct === null) return { etiqueta: "—", claseTexto: "text-text-soft" };
-  if (pct >= 95) return { etiqueta: "Asistencia Plena", claseTexto: "text-teal font-semibold" };
-  if (pct >= 80) return { etiqueta: "Asistencia Regular", claseTexto: "text-navy font-semibold" };
-  if (pct >= 65) return { etiqueta: "Asistencia Irregular", claseTexto: "text-warning font-semibold" };
-  if (pct >= 50) return { etiqueta: "Inasistencia reiterada", claseTexto: "text-danger font-semibold" };
-  return { etiqueta: "Inasistencia grave", claseTexto: "text-danger font-bold" };
+  if (pct >= 95) return { etiqueta: "Plena", claseTexto: "text-teal font-semibold" };
+  if (pct >= 80) return { etiqueta: "Regular", claseTexto: "text-navy font-semibold" };
+  if (pct >= 65) return { etiqueta: "Irregular", claseTexto: "text-warning font-semibold" };
+  if (pct >= 50) return { etiqueta: "Reiterada", claseTexto: "text-danger font-semibold" };
+  return { etiqueta: "Grave", claseTexto: "text-danger font-bold" };
 }
+
+const ETIQUETA_LARGA: Record<string, string> = {
+  Plena: "Asistencia Plena",
+  Regular: "Asistencia Regular",
+  Irregular: "Asistencia Irregular",
+  Reiterada: "Inasistencia reiterada",
+  Grave: "Inasistencia grave",
+};
 
 export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cursoId: string }> }) {
   const { cursoId } = use(params);
@@ -189,11 +197,11 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
 
   const resumenCurso = useMemo(() => {
     const conteo: Record<string, number> = {
-      "Asistencia Plena": 0,
-      "Asistencia Regular": 0,
-      "Asistencia Irregular": 0,
-      "Inasistencia reiterada": 0,
-      "Inasistencia grave": 0,
+      Plena: 0,
+      Regular: 0,
+      Irregular: 0,
+      Reiterada: 0,
+      Grave: 0,
     };
     let consideradas = 0;
     estudiantes.forEach((e) => {
@@ -222,6 +230,12 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
 
   return (
     <div className="flex flex-col gap-5">
+      <style>{`
+        @media print {
+          @page { size: landscape; margin: 8mm; }
+        }
+      `}</style>
+
       <div className="print:hidden flex flex-col gap-3">
         <Link href={`/institucion/cursos/${cursoId}`} className="text-xs text-teal font-medium">
           ← Volver al curso
@@ -326,7 +340,7 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-5 overflow-x-auto">
+      <div className="bg-card border border-border rounded-xl p-5 overflow-x-auto print:overflow-visible print:border-0 print:p-0">
         <EncabezadoDocumento
           titulo="REGISTRO DE ASISTENCIA"
           datos={[
@@ -337,28 +351,22 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
           ]}
         />
 
-        <div className="mb-3">
-          <div className="text-xs text-text-soft">P = Presente · A = Ausente · T = Tardanza · J = Justificado</div>
-          <div className="text-xs text-text-soft">
-            El % de asistencia se calcula sobre los días de clase registrados en el mes (la tardanza cuenta como
-            presente). Los días marcados con * no se cuentan.
-          </div>
-        </div>
-
-        <table className="text-xs border-collapse w-full">
+        <table className="border-collapse w-full" style={{ fontSize: "9px" }}>
           <thead>
             <tr>
-              <th className="text-left py-1.5 pr-3 border-b border-border sticky left-0 bg-card">Estudiante</th>
+              <th className="text-left py-1 pr-2 border-b border-border sticky left-0 bg-card whitespace-nowrap">
+                Estudiante
+              </th>
               {dias.map((d) => (
-                <th key={d} className="text-center py-1.5 px-1 border-b border-border font-medium">
+                <th key={d} className="text-center py-1 border-b border-border font-medium" style={{ width: "16px" }}>
                   {d}
                   {sinClaseMapa.has(d) && <span className="text-danger">*</span>}
                 </th>
               ))}
-              <th className="text-center py-1.5 px-2 border-b border-border font-semibold">Ausencias</th>
-              <th className="text-center py-1.5 px-2 border-b border-border font-semibold">Tardanzas</th>
-              <th className="text-center py-1.5 px-2 border-b border-border font-semibold">%</th>
-              <th className="text-left py-1.5 px-2 border-b border-border font-semibold">Situación</th>
+              <th className="text-center py-1 px-1 border-b border-border font-semibold">A</th>
+              <th className="text-center py-1 px-1 border-b border-border font-semibold">T</th>
+              <th className="text-center py-1 px-1 border-b border-border font-semibold">%</th>
+              <th className="text-left py-1 px-1 border-b border-border font-semibold">Sit.</th>
             </tr>
           </thead>
           <tbody>
@@ -381,18 +389,20 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
               const situacion = calcularSituacion(pct);
               return (
                 <tr key={e.id}>
-                  <td className="py-1.5 pr-3 border-b border-border whitespace-nowrap sticky left-0 bg-card">{e.nombre_completo}</td>
+                  <td className="py-1 pr-2 border-b border-border whitespace-nowrap sticky left-0 bg-card">
+                    {e.nombre_completo}
+                  </td>
                   {dias.map((d) => (
-                    <td key={d} className="text-center py-1.5 px-1 border-b border-border">
+                    <td key={d} className="text-center py-1 border-b border-border">
                       {sinClaseMapa.has(d) ? "" : fila?.get(d) ?? ""}
                     </td>
                   ))}
-                  <td className="text-center py-1.5 px-2 border-b border-border font-semibold text-danger">{ausencias || ""}</td>
-                  <td className="text-center py-1.5 px-2 border-b border-border font-semibold text-warning">{tardanzas || ""}</td>
-                  <td className="text-center py-1.5 px-2 border-b border-border font-semibold">
+                  <td className="text-center py-1 px-1 border-b border-border font-semibold text-danger">{ausencias || ""}</td>
+                  <td className="text-center py-1 px-1 border-b border-border font-semibold text-warning">{tardanzas || ""}</td>
+                  <td className="text-center py-1 px-1 border-b border-border font-semibold">
                     {pct === null ? "—" : `${Math.round(pct)}%`}
                   </td>
-                  <td className={`text-left py-1.5 px-2 border-b border-border whitespace-nowrap ${situacion.claseTexto}`}>
+                  <td className={`text-left py-1 px-1 border-b border-border whitespace-nowrap ${situacion.claseTexto}`}>
                     {situacion.etiqueta}
                   </td>
                 </tr>
@@ -408,49 +418,55 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
           </tbody>
         </table>
 
-        {diasSinClase.length > 0 && (
-          <div className="mt-3 text-xs text-text-soft">
-            <span className="font-semibold">Referencias: </span>
-            {diasSinClase.map((d, i) => (
-              <span key={d.id}>
-                {i > 0 && " · "}* {Number(d.fecha.slice(8, 10))}: {d.motivo}
-              </span>
-            ))}
-          </div>
-        )}
-
         {estudiantes.length > 0 && (
-          <div className="mt-4 pt-3 border-t border-border">
-            <div className="text-xs font-semibold mb-1.5">
-              Resumen de asistencia del curso — {nombreMes}
-              {resumenCurso.consideradas < estudiantes.length && (
-                <span className="font-normal text-text-soft">
-                  {" "}
-                  (sobre {resumenCurso.consideradas} de {estudiantes.length} estudiantes con días registrados)
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-              {Object.entries(resumenCurso.conteo).map(([etiqueta, cantidad]) => {
-                const pctCurso =
-                  resumenCurso.consideradas > 0 ? Math.round((cantidad / resumenCurso.consideradas) * 100) : 0;
-                const { claseTexto } = calcularSituacion(
-                  etiqueta === "Asistencia Plena"
-                    ? 100
-                    : etiqueta === "Asistencia Regular"
-                      ? 85
-                      : etiqueta === "Asistencia Irregular"
-                        ? 70
-                        : etiqueta === "Inasistencia reiterada"
-                          ? 55
-                          : 0
-                );
-                return (
-                  <span key={etiqueta} className={claseTexto}>
-                    {etiqueta}: {cantidad} ({pctCurso}%)
+          <div className="mt-3 pt-3 border-t border-border grid grid-cols-2 gap-4">
+            <div>
+              <div className="text-xs font-semibold mb-1.5">
+                Resumen mensual del curso
+                {resumenCurso.consideradas < estudiantes.length && (
+                  <span className="font-normal text-text-soft">
+                    {" "}
+                    ({resumenCurso.consideradas}/{estudiantes.length} estudiantes con días registrados)
                   </span>
-                );
-              })}
+                )}
+              </div>
+              <div className="flex flex-col gap-0.5 text-xs">
+                {Object.entries(resumenCurso.conteo).map(([etiqueta, cantidad]) => {
+                  const pctCurso =
+                    resumenCurso.consideradas > 0 ? Math.round((cantidad / resumenCurso.consideradas) * 100) : 0;
+                  const { claseTexto } = calcularSituacion(
+                    etiqueta === "Plena"
+                      ? 100
+                      : etiqueta === "Regular"
+                        ? 85
+                        : etiqueta === "Irregular"
+                          ? 70
+                          : etiqueta === "Reiterada"
+                            ? 55
+                            : 0
+                  );
+                  return (
+                    <span key={etiqueta} className={claseTexto}>
+                      {ETIQUETA_LARGA[etiqueta]}: {cantidad} ({pctCurso}%)
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs font-semibold mb-1.5">Observaciones del mes</div>
+              {diasSinClase.length === 0 ? (
+                <div className="text-xs text-text-soft">Sin observaciones este mes.</div>
+              ) : (
+                <div className="flex flex-col gap-0.5 text-xs">
+                  {diasSinClase.map((d) => (
+                    <span key={d.id}>
+                      <span className="text-danger font-semibold">*</span> Día {Number(d.fecha.slice(8, 10))}: {d.motivo}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
