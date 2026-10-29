@@ -37,10 +37,10 @@ function mesActualISO() {
 
 function calcularSituacion(pct: number | null): Situacion {
   if (pct === null) return { etiqueta: "—", claseTexto: "text-text-soft" };
-  if (pct >= 95) return { etiqueta: "Plena", claseTexto: "text-teal font-semibold" };
+  if (pct >= 95) return { etiqueta: "Plena", claseTexto: "text-green-600 font-semibold" };
   if (pct >= 80) return { etiqueta: "Regular", claseTexto: "text-navy font-semibold" };
-  if (pct >= 65) return { etiqueta: "Irregular", claseTexto: "text-warning font-semibold" };
-  if (pct >= 50) return { etiqueta: "Reiterada", claseTexto: "text-danger font-semibold" };
+  if (pct >= 65) return { etiqueta: "Irregular", claseTexto: "text-yellow-600 font-semibold" };
+  if (pct >= 50) return { etiqueta: "Reiterada", claseTexto: "text-orange-600 font-semibold" };
   return { etiqueta: "Grave", claseTexto: "text-danger font-bold" };
 }
 
@@ -354,14 +354,14 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
           ]}
         />
 
-        <table className="border-collapse w-full" style={{ fontSize: "11px" }}>
+        <table className="border-collapse" style={{ fontSize: "13px" }}>
           <thead>
             <tr>
               <th className="text-left py-1 pr-2 border-b border-border sticky left-0 bg-card whitespace-nowrap">
                 Estudiante
               </th>
               {dias.map((d) => (
-                <th key={d} className="text-center py-1 border-b border-border font-medium" style={{ width: "20px" }}>
+                <th key={d} className="text-center py-1 border-b border-border font-medium" style={{ width: "24px" }}>
                   {d}
                   {sinClaseMapa.has(d) && <span className="text-danger">*</span>}
                 </th>
