@@ -8,6 +8,7 @@ import EncabezadoDocumento from "@/components/EncabezadoDocumento";
 type Curso = { id: string; grado: string; turno: string; ciclo: string; enfasis: string | null };
 type Estudiante = { id: string; nombre_completo: string };
 type AsistenciaFila = { estudiante_id: string; fecha: string; estado: string };
+type DiaSinClase = { id: string; fecha: string; motivo: string };
 
 const CODIGO: Record<string, string> = {
   presente: "P",
@@ -22,9 +23,25 @@ const etiquetaTurno: Record<string, string> = {
   noche: "Turno noche",
 };
 
+const MOTIVOS_PRESET = ["Feriado", "Jornada sindical", "Reunión", "Lluvia", "Otro"];
+
+type Situacion = {
+  etiqueta: string;
+  claseTexto: string;
+};
+
 function mesActualISO() {
   const hoy = new Date();
   return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function calcularSituacion(pct: number | null): Situacion {
+  if (pct === null) return { etiqueta: "—", claseTexto: "text-text-soft" };
+  if (pct >= 95) return { etiqueta: "Asistencia Plena", claseTexto: "text-teal font-semibold" };
+  if (pct >= 80) return { etiqueta: "Asistencia Regular", claseTexto: "text-navy font-semibold" };
+  if (pct >= 65) return { etiqueta: "Asistencia Irregular", claseTexto: "text-warning font-semibold" };
+  if (pct >= 50) return { etiqueta: "Inasistencia reiterada", claseTexto: "text-danger font-semibold" };
+  return { etiqueta: "Inasistencia grave", claseTexto: "text-danger font-bold" };
 }
 
 export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cursoId: string }> }) {
@@ -35,7 +52,14 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
   const [mes, setMes] = useState(mesActualISO());
   const [filas, setFilas] = useState<AsistenciaFila[]>([]);
+  const [diasSinClase, setDiasSinClase] = useState<DiaSinClase[]>([]);
   const [cargando, setCargando] = useState(true);
+
+  const [nuevaFecha, setNuevaFecha] = useState("");
+  const [nuevoMotivo, setNuevoMotivo] = useState("Feriado");
+  const [nuevoMotivoOtro, setNuevoMotivoOtro] = useState("");
+  const [guardandoDia, setGuardandoDia] = useState(false);
+  const [mensajeDia, setMensajeDia] = useState<string | null>(null);
 
   const cargarBase = useCallback(async () => {
     const { data: cursoData } = await supabase
@@ -89,6 +113,22 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
     cargarAsistencias();
   }, [cargarAsistencias]);
 
+  const cargarDiasSinClase = useCallback(async () => {
+    const { data } = await supabase
+      .from("dias_sin_clase")
+      .select("id, fecha, motivo")
+      .eq("curso_id", cursoId)
+      .gte("fecha", primerDia)
+      .lte("fecha", ultimoDia)
+      .order("fecha");
+    setDiasSinClase(data ?? []);
+  }, [cursoId, primerDia, ultimoDia, supabase]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga de días sin clase del mes seleccionado
+    cargarDiasSinClase();
+  }, [cargarDiasSinClase]);
+
   const mapa = useMemo(() => {
     const m = new Map<string, Map<number, string>>();
     filas.forEach((f) => {
@@ -99,8 +139,84 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
     return m;
   }, [filas]);
 
+  const sinClaseMapa = useMemo(() => {
+    const m = new Map<number, string>();
+    diasSinClase.forEach((d) => {
+      const dia = Number(d.fecha.slice(8, 10));
+      m.set(dia, d.motivo);
+    });
+    return m;
+  }, [diasSinClase]);
+
   const dias = Array.from({ length: diasDelMes }, (_, i) => i + 1);
   const nombreMes = new Date(anio, mesNum - 1, 1).toLocaleDateString("es-PY", { month: "long", year: "numeric" });
+
+  async function agregarDiaSinClase(e: React.FormEvent) {
+    e.preventDefault();
+    if (!nuevaFecha) {
+      setMensajeDia("Elegí una fecha.");
+      return;
+    }
+    const motivoFinal = nuevoMotivo === "Otro" ? nuevoMotivoOtro.trim() : nuevoMotivo;
+    if (!motivoFinal) {
+      setMensajeDia("Escribí el motivo.");
+      return;
+    }
+    setGuardandoDia(true);
+    setMensajeDia(null);
+    const { error } = await supabase.from("dias_sin_clase").insert({
+      curso_id: cursoId,
+      fecha: nuevaFecha,
+      motivo: motivoFinal,
+    });
+    setGuardandoDia(false);
+    if (error) {
+      setMensajeDia(
+        error.code === "23505" ? "Ya hay un motivo cargado para esa fecha." : "No se pudo guardar: " + error.message
+      );
+      return;
+    }
+    setNuevaFecha("");
+    setNuevoMotivo("Feriado");
+    setNuevoMotivoOtro("");
+    cargarDiasSinClase();
+  }
+
+  async function eliminarDiaSinClase(id: string) {
+    await supabase.from("dias_sin_clase").delete().eq("id", id);
+    cargarDiasSinClase();
+  }
+
+  const resumenCurso = useMemo(() => {
+    const conteo: Record<string, number> = {
+      "Asistencia Plena": 0,
+      "Asistencia Regular": 0,
+      "Asistencia Irregular": 0,
+      "Inasistencia reiterada": 0,
+      "Inasistencia grave": 0,
+    };
+    let consideradas = 0;
+    estudiantes.forEach((e) => {
+      const fila = mapa.get(e.id);
+      let presentesOTardanzas = 0;
+      let registrados = 0;
+      dias.forEach((d) => {
+        if (sinClaseMapa.has(d)) return;
+        const c = fila?.get(d);
+        if (!c) return;
+        registrados += 1;
+        if (c === "P" || c === "T") presentesOTardanzas += 1;
+      });
+      if (registrados === 0) return;
+      const pct = (presentesOTardanzas / registrados) * 100;
+      const { etiqueta } = calcularSituacion(pct);
+      if (etiqueta in conteo) {
+        conteo[etiqueta] += 1;
+        consideradas += 1;
+      }
+    });
+    return { conteo, consideradas };
+  }, [estudiantes, mapa, dias, sinClaseMapa]);
 
   if (cargando) return <p className="text-sm text-text-soft">Cargando…</p>;
 
@@ -132,6 +248,82 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
             </button>
           </div>
         </div>
+
+        <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-3">
+          <h2 className="text-sm font-semibold">Días sin clases este mes</h2>
+          <p className="text-xs text-text-soft -mt-2">
+            Marcá acá los feriados, jornadas sindicales, reuniones, días de lluvia, etc. Esos días no van a contar
+            para el cálculo del % de asistencia y van a aparecer con un asterisco en la planilla.
+          </p>
+
+          {diasSinClase.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {diasSinClase.map((d) => (
+                <span
+                  key={d.id}
+                  className="inline-flex items-center gap-2 text-xs bg-bg border border-border rounded-full pl-3 pr-1.5 py-1"
+                >
+                  {Number(d.fecha.slice(8, 10))} de {nombreMes.split(" ")[0]} — {d.motivo}
+                  <button
+                    type="button"
+                    onClick={() => eliminarDiaSinClase(d.id)}
+                    className="w-5 h-5 rounded-full bg-border text-text-soft font-bold leading-none"
+                    aria-label={`Quitar día ${d.fecha}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <form onSubmit={agregarDiaSinClase} className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+              Fecha
+              <input
+                type="date"
+                value={nuevaFecha}
+                min={primerDia}
+                max={ultimoDia}
+                onChange={(e) => setNuevaFecha(e.target.value)}
+                className="h-10 rounded-lg border border-border px-3 text-sm bg-card"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+              Motivo
+              <select
+                value={nuevoMotivo}
+                onChange={(e) => setNuevoMotivo(e.target.value)}
+                className="h-10 rounded-lg border border-border px-3 text-sm bg-card"
+              >
+                {MOTIVOS_PRESET.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {nuevoMotivo === "Otro" && (
+              <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+                Detalle
+                <input
+                  value={nuevoMotivoOtro}
+                  onChange={(e) => setNuevoMotivoOtro(e.target.value)}
+                  placeholder="Ej: Acto escolar"
+                  className="h-10 rounded-lg border border-border px-3 text-sm bg-card"
+                />
+              </label>
+            )}
+            <button
+              type="submit"
+              disabled={guardandoDia}
+              className="h-10 rounded-lg border border-border font-semibold text-sm px-4 disabled:opacity-60"
+            >
+              {guardandoDia ? "Guardando…" : "+ Agregar"}
+            </button>
+          </form>
+          {mensajeDia && <div className="text-xs text-text-soft">{mensajeDia}</div>}
+        </div>
       </div>
 
       <div className="bg-card border border-border rounded-xl p-5 overflow-x-auto">
@@ -147,6 +339,10 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
 
         <div className="mb-3">
           <div className="text-xs text-text-soft">P = Presente · A = Ausente · T = Tardanza · J = Justificado</div>
+          <div className="text-xs text-text-soft">
+            El % de asistencia se calcula sobre los días de clase registrados en el mes (la tardanza cuenta como
+            presente). Los días marcados con * no se cuentan.
+          </div>
         </div>
 
         <table className="text-xs border-collapse w-full">
@@ -156,10 +352,13 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
               {dias.map((d) => (
                 <th key={d} className="text-center py-1.5 px-1 border-b border-border font-medium">
                   {d}
+                  {sinClaseMapa.has(d) && <span className="text-danger">*</span>}
                 </th>
               ))}
               <th className="text-center py-1.5 px-2 border-b border-border font-semibold">Ausencias</th>
               <th className="text-center py-1.5 px-2 border-b border-border font-semibold">Tardanzas</th>
+              <th className="text-center py-1.5 px-2 border-b border-border font-semibold">%</th>
+              <th className="text-left py-1.5 px-2 border-b border-border font-semibold">Situación</th>
             </tr>
           </thead>
           <tbody>
@@ -167,33 +366,94 @@ export default function ReporteAsistenciaPage({ params }: { params: Promise<{ cu
               const fila = mapa.get(e.id);
               let ausencias = 0;
               let tardanzas = 0;
+              let presentesOTardanzas = 0;
+              let registrados = 0;
               dias.forEach((d) => {
+                if (sinClaseMapa.has(d)) return;
                 const c = fila?.get(d);
                 if (c === "A") ausencias += 1;
                 if (c === "T") tardanzas += 1;
+                if (!c) return;
+                registrados += 1;
+                if (c === "P" || c === "T") presentesOTardanzas += 1;
               });
+              const pct = registrados > 0 ? (presentesOTardanzas / registrados) * 100 : null;
+              const situacion = calcularSituacion(pct);
               return (
                 <tr key={e.id}>
                   <td className="py-1.5 pr-3 border-b border-border whitespace-nowrap sticky left-0 bg-card">{e.nombre_completo}</td>
                   {dias.map((d) => (
                     <td key={d} className="text-center py-1.5 px-1 border-b border-border">
-                      {fila?.get(d) ?? ""}
+                      {sinClaseMapa.has(d) ? "" : fila?.get(d) ?? ""}
                     </td>
                   ))}
                   <td className="text-center py-1.5 px-2 border-b border-border font-semibold text-danger">{ausencias || ""}</td>
                   <td className="text-center py-1.5 px-2 border-b border-border font-semibold text-warning">{tardanzas || ""}</td>
+                  <td className="text-center py-1.5 px-2 border-b border-border font-semibold">
+                    {pct === null ? "—" : `${Math.round(pct)}%`}
+                  </td>
+                  <td className={`text-left py-1.5 px-2 border-b border-border whitespace-nowrap ${situacion.claseTexto}`}>
+                    {situacion.etiqueta}
+                  </td>
                 </tr>
               );
             })}
             {estudiantes.length === 0 && (
               <tr>
-                <td className="py-3 text-text-soft" colSpan={dias.length + 3}>
+                <td className="py-3 text-text-soft" colSpan={dias.length + 5}>
                   Sin estudiantes activos en este curso.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+
+        {diasSinClase.length > 0 && (
+          <div className="mt-3 text-xs text-text-soft">
+            <span className="font-semibold">Referencias: </span>
+            {diasSinClase.map((d, i) => (
+              <span key={d.id}>
+                {i > 0 && " · "}* {Number(d.fecha.slice(8, 10))}: {d.motivo}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {estudiantes.length > 0 && (
+          <div className="mt-4 pt-3 border-t border-border">
+            <div className="text-xs font-semibold mb-1.5">
+              Resumen de asistencia del curso — {nombreMes}
+              {resumenCurso.consideradas < estudiantes.length && (
+                <span className="font-normal text-text-soft">
+                  {" "}
+                  (sobre {resumenCurso.consideradas} de {estudiantes.length} estudiantes con días registrados)
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+              {Object.entries(resumenCurso.conteo).map(([etiqueta, cantidad]) => {
+                const pctCurso =
+                  resumenCurso.consideradas > 0 ? Math.round((cantidad / resumenCurso.consideradas) * 100) : 0;
+                const { claseTexto } = calcularSituacion(
+                  etiqueta === "Asistencia Plena"
+                    ? 100
+                    : etiqueta === "Asistencia Regular"
+                      ? 85
+                      : etiqueta === "Asistencia Irregular"
+                        ? 70
+                        : etiqueta === "Inasistencia reiterada"
+                          ? 55
+                          : 0
+                );
+                return (
+                  <span key={etiqueta} className={claseTexto}>
+                    {etiqueta}: {cantidad} ({pctCurso}%)
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
