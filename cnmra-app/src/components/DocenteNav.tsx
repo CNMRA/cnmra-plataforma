@@ -6,8 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 const links = [
-  { href: "/docente", label: "Mis documentos" },
-  { href: "/docente/subir", label: "Subir documento" },
+  { href: "/docente", label: "Inicio" },
+  { href: "/docente/legajo", label: "Mi legajo" },
   { href: "/docente/cuenta", label: "Mi cuenta" },
 ];
 
