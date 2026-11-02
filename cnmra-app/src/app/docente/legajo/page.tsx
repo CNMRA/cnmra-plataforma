@@ -7,6 +7,92 @@ import { BUCKET_DOCENTES, MAX_BYTES_ARCHIVO, comprimirImagen, extensionDe, mimeD
 type Curso = { id: string; grado: string; turno: string; ciclo: string; enfasis: string | null };
 type Disciplina = { id: string; nombre: string };
 type Titulo = { titulo: string; institucion: string; anio: string; path: string | null; nombre: string | null };
+type PaginaJpeg = { bytes: Uint8Array; ancho: number; alto: number };
+
+/** Arma un PDF simple con una foto (JPEG) por página, sin librerías externas. */
+function construirPdf(paginas: PaginaJpeg[]): Blob {
+  const enc = new TextEncoder();
+  const partes: Uint8Array[] = [];
+  const offsets: number[] = [];
+  let largo = 0;
+
+  const poner = (dato: Uint8Array | string) => {
+    const b = typeof dato === "string" ? enc.encode(dato) : dato;
+    partes.push(b);
+    largo += b.length;
+  };
+  const abrir = (n: number) => {
+    offsets[n] = largo;
+  };
+
+  const total = 2 + paginas.length * 3;
+  poner("%PDF-1.4\n");
+
+  abrir(1);
+  poner("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+
+  const hijos = paginas.map((_, i) => `${3 + i * 3} 0 R`).join(" ");
+  abrir(2);
+  poner(`2 0 obj\n<< /Type /Pages /Kids [${hijos}] /Count ${paginas.length} >>\nendobj\n`);
+
+  paginas.forEach((p, i) => {
+    const idPagina = 3 + i * 3;
+    const idContenido = idPagina + 1;
+    const idImagen = idPagina + 2;
+    const escala = 842 / Math.max(p.ancho, p.alto);
+    const ancho = (p.ancho * escala).toFixed(2);
+    const alto = (p.alto * escala).toFixed(2);
+
+    abrir(idPagina);
+    poner(
+      `${idPagina} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${ancho} ${alto}] ` +
+        `/Resources << /XObject << /Im0 ${idImagen} 0 R >> >> /Contents ${idContenido} 0 R >>\nendobj\n`
+    );
+
+    const contenido = `q ${ancho} 0 0 ${alto} 0 0 cm /Im0 Do Q`;
+    abrir(idContenido);
+    poner(`${idContenido} 0 obj\n<< /Length ${contenido.length} >>\nstream\n${contenido}\nendstream\nendobj\n`);
+
+    abrir(idImagen);
+    poner(
+      `${idImagen} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${p.ancho} /Height ${p.alto} ` +
+        `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${p.bytes.length} >>\nstream\n`
+    );
+    poner(p.bytes);
+    poner("\nendstream\nendobj\n");
+  });
+
+  const inicioXref = largo;
+  poner(`xref\n0 ${total + 1}\n0000000000 65535 f \n`);
+  for (let n = 1; n <= total; n++) {
+    poner(`${String(offsets[n]).padStart(10, "0")} 00000 n \n`);
+  }
+  poner(`trailer\n<< /Size ${total + 1} /Root 1 0 R >>\nstartxref\n${inicioXref}\n%%EOF`);
+
+  return new Blob(partes as unknown as BlobPart[], { type: "application/pdf" });
+}
+
+type ClaveDoc = "cedula" | "certificacion" | "constancia";
+type ArchivoLegajo = { path: string; nombre: string };
+
+const DOCUMENTOS_PERSONAL: { clave: ClaveDoc; label: string; ayuda: string }[] = [
+  {
+    clave: "cedula",
+    label: "Cédula de identidad",
+    ayuda: "Foto del frente y del dorso (elegí las dos juntas desde la galería) o un PDF.",
+  },
+  {
+    clave: "certificacion",
+    label: "Certificación documental actual (SIGMEC)",
+    ayuda: "Foto(s) o PDF de la certificación documental vigente.",
+  },
+  {
+    clave: "constancia",
+    label: "Constancia de cargo actual (SIGMEC)",
+    ayuda: "Foto(s) o PDF de la constancia de cargo vigente.",
+  },
+];
+
 type Asignacion = {
   ciclo: string;
   turno: string;
@@ -99,6 +185,7 @@ export default function MiLegajoPage() {
   const [asignaciones, setAsignaciones] = useState<Asignacion[]>([]);
   const [fotoPath, setFotoPath] = useState<string | null>(null);
   const [fotoUrl, setFotoUrl] = useState<string | null>(null);
+  const [documentos, setDocumentos] = useState<Partial<Record<ClaveDoc, ArchivoLegajo>>>({});
   const [enviado, setEnviado] = useState(false);
   const [enviadoEn, setEnviadoEn] = useState<string | null>(null);
 
@@ -140,6 +227,7 @@ export default function MiLegajoPage() {
       setForm(nuevo);
       setTitulos(((registro.titulos as Titulo[] | null) ?? []).map((t) => ({ ...t })));
       setAsignaciones((registro.asignaciones as Asignacion[] | null) ?? []);
+      setDocumentos((registro.documentos as Partial<Record<ClaveDoc, ArchivoLegajo>> | null) ?? {});
       setEnviado(Boolean(registro.enviado));
       setEnviadoEn((registro.enviado_en as string | null) ?? null);
       const path = (registro.foto_path as string | null) ?? null;
@@ -262,6 +350,59 @@ export default function MiLegajoPage() {
     setSubiendo(null);
   }
 
+  async function subirDocumento(clave: ClaveDoc, e: React.ChangeEvent<HTMLInputElement>) {
+    const elegidos = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (elegidos.length === 0) return;
+    const imagenes = elegidos.filter((f) => f.type.startsWith("image/"));
+    const pdfs = elegidos.filter((f) => !f.type.startsWith("image/") && extensionDe(f.name) === "pdf");
+    if (imagenes.length + pdfs.length !== elegidos.length || (imagenes.length > 0 && pdfs.length > 0) || pdfs.length > 1) {
+      setMensaje({ tipo: "error", texto: "Subí fotos (varias si hace falta) o un único PDF, pero no mezclados." });
+      return;
+    }
+    if (imagenes.length > 6) {
+      setMensaje({ tipo: "error", texto: "Podés subir hasta 6 fotos por documento." });
+      return;
+    }
+    setSubiendo(`doc-${clave}`);
+    setMensaje(null);
+    try {
+      let cuerpo: Blob;
+      let nombre: string;
+      if (imagenes.length > 0) {
+        const paginas: PaginaJpeg[] = [];
+        for (const img of imagenes) {
+          const { blob } = await comprimirImagen(img);
+          const bmp = await createImageBitmap(blob);
+          const ancho = bmp.width;
+          const alto = bmp.height;
+          bmp.close();
+          paginas.push({ bytes: new Uint8Array(await blob.arrayBuffer()), ancho, alto });
+        }
+        cuerpo = construirPdf(paginas);
+        nombre = `${clave}.pdf`;
+      } else {
+        cuerpo = pdfs[0];
+        nombre = pdfs[0].name;
+      }
+      if (cuerpo.size > MAX_BYTES_ARCHIVO) throw new Error("El archivo pesa más de 10 MB.");
+
+      const path = `${uid}/legajo/${clave}-${Date.now()}.pdf`;
+      const { error } = await supabase.storage.from(BUCKET_DOCENTES).upload(path, cuerpo, { contentType: "application/pdf" });
+      if (error) throw new Error(error.message);
+
+      const anterior = documentos[clave]?.path ?? null;
+      const nuevos = { ...documentos, [clave]: { path, nombre } };
+      const errGuardar = await persistir({ documentos: nuevos });
+      if (errGuardar) throw new Error(errGuardar.message);
+      setDocumentos(nuevos);
+      if (anterior) await supabase.storage.from(BUCKET_DOCENTES).remove([anterior]);
+    } catch (err) {
+      setMensaje({ tipo: "error", texto: "No se pudo subir el documento: " + (err as Error).message });
+    }
+    setSubiendo(null);
+  }
+
   function cambiarTitulo(i: number, campo: "titulo" | "institucion" | "anio", valor: string) {
     setTitulos(titulos.map((t, n) => (n === i ? { ...t, [campo]: valor } : t)));
   }
@@ -347,6 +488,9 @@ export default function MiLegajoPage() {
     if (titulos.length === 0 || titulos.some((t) => !t.titulo.trim() || !t.path)) {
       lista.push("Títulos (cada uno con su nombre y su archivo adjunto)");
     }
+    DOCUMENTOS_PERSONAL.forEach((d) => {
+      if (!documentos[d.clave]) lista.push(d.label);
+    });
     if (asignaciones.length === 0) lista.push("Qué enseño (al menos una materia)");
     return lista;
   }
@@ -387,6 +531,7 @@ export default function MiLegajoPage() {
       experiencia: texto(form.experiencia),
       titulos,
       asignaciones,
+      documentos,
       foto_path: fotoPath,
     };
     if (enviar && !enviado) {
@@ -652,6 +797,43 @@ export default function MiLegajoPage() {
         >
           + Agregar título
         </button>
+      </section>
+
+      <section className={tarjeta}>
+        <h2 className="font-semibold">Documentos del personal</h2>
+        <p className="text-xs text-text-soft">
+          Los tres son obligatorios. Se guardan como PDF (máximo 10 MB). Si sacás fotos, se juntan solas en un PDF.
+        </p>
+        {DOCUMENTOS_PERSONAL.map((d) => {
+          const actual = documentos[d.clave];
+          return (
+            <div key={d.clave} className="border border-border rounded-lg p-3 flex flex-col gap-2">
+              <div className="text-[13px] font-medium">
+                {d.label} <span className="text-danger">*</span>
+              </div>
+              <div className="text-xs text-text-soft">{d.ayuda}</div>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="h-9 rounded-lg border border-border px-3.5 flex items-center text-[13px] font-medium cursor-pointer bg-bg">
+                  {actual ? "Cambiar archivo" : "Adjuntar"}
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*,application/pdf"
+                    onChange={(e) => subirDocumento(d.clave, e)}
+                    className="hidden"
+                  />
+                </label>
+                {subiendo === `doc-${d.clave}` && <span className="text-xs text-text-soft">Subiendo…</span>}
+                {actual && subiendo !== `doc-${d.clave}` && (
+                  <button type="button" onClick={() => abrirArchivo(actual.path)} className="text-xs text-navy font-medium">
+                    Ver archivo ({actual.nombre})
+                  </button>
+                )}
+                {!actual && <span className="text-xs text-danger">Falta adjuntar</span>}
+              </div>
+            </div>
+          );
+        })}
       </section>
 
       <section className={tarjeta}>
