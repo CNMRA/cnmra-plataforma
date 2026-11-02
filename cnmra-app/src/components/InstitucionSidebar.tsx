@@ -7,12 +7,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAnioLectivo } from "@/lib/anio-lectivo";
 
-const links = [
+const links: { href: string; label: string; soloDirector?: boolean }[] = [
   { href: "/institucion", label: "Panel" },
   { href: "/institucion/inscripcion", label: "Inscripción" },
   { href: "/institucion/cursos", label: "Cursos" },
   { href: "/institucion/avisos", label: "Avisos" },
   { href: "/institucion/usuarios", label: "Usuarios" },
+  { href: "/institucion/docentes", label: "Docentes", soloDirector: true },
 ];
 
 export default function InstitucionSidebar({
@@ -61,7 +62,7 @@ export default function InstitucionSidebar({
 
   const navLinks = (onClick?: () => void) => (
     <nav className="flex flex-col gap-0.5">
-      {links.map((l) => {
+      {links.filter((l) => !l.soloDirector || rol === "director").map((l) => {
         const active = l.href === "/institucion" ? pathname === l.href : pathname.startsWith(l.href);
         return (
           <Link
