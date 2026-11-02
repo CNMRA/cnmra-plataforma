@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-type Perfil = { id: string; nombre_completo: string; rol: string; activo: boolean };
+type Perfil = { id: string; nombre_completo: string; rol: string; activo: boolean; acompanamiento: boolean };
 type Familia = {
   id: string;
   tutor_nombre: string;
@@ -22,14 +22,15 @@ export default function UsuariosInstitucional() {
   const [rol, setRol] = useState("carga_datos");
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const [mensajeEquipo, setMensajeEquipo] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     const { data: perfilesData } = await supabase
       .from("perfiles")
-      .select("id, nombre_completo, rol, activo")
+      .select("id, nombre_completo, rol, activo, acompanamiento")
       .in("rol", ["director", "carga_datos"])
       .order("rol");
-    setPerfiles(perfilesData ?? []);
+    setPerfiles((perfilesData as Perfil[] | null) ?? []);
 
     const { data: familiasData } = await supabase
       .from("familias")
@@ -57,6 +58,32 @@ export default function UsuariosInstitucional() {
       cargar();
     }
     setGuardando(false);
+  }
+
+  async function alternarAcompanamiento(p: Perfil) {
+    const nuevo = !p.acompanamiento;
+    const pregunta = nuevo
+      ? `¿Dar acompañamiento docente a ${p.nombre_completo}? Podrá VER y imprimir los legajos y los planes de los docentes (no podrá editar nada).`
+      : `¿Quitar el acompañamiento docente a ${p.nombre_completo}?`;
+    if (!window.confirm(pregunta)) return;
+    setMensajeEquipo(null);
+    const { data, error } = await supabase
+      .from("perfiles")
+      .update({ acompanamiento: nuevo })
+      .eq("id", p.id)
+      .select("id");
+    if (error || !data || data.length === 0) {
+      setMensajeEquipo(
+        "No se pudo cambiar: " + (error?.message ?? "solo Dirección puede hacerlo.")
+      );
+      return;
+    }
+    setMensajeEquipo(
+      nuevo
+        ? `${p.nombre_completo} ahora tiene acompañamiento docente.`
+        : `Se quitó el acompañamiento a ${p.nombre_completo}.`
+    );
+    cargar();
   }
 
   const director = perfiles.find((p) => p.rol === "director");
@@ -92,14 +119,39 @@ export default function UsuariosInstitucional() {
       </div>
 
       <div className="bg-card border border-border rounded-xl p-5">
-        <div className="text-[11px] font-semibold text-text-soft tracking-wide mb-3">
+        <div className="text-[11px] font-semibold text-text-soft tracking-wide mb-1">
           EQUIPO DE CARGA DE DATOS ({equipo.length})
         </div>
+        <p className="text-xs text-text-soft mb-3">
+          Con <b>acompañamiento docente</b>, la persona puede ver e imprimir los legajos y los planes de los docentes.
+          No puede editar nada, ni crear cuentas, ni cambiar claves.
+        </p>
+        {mensajeEquipo && (
+          <div className="text-sm bg-bg border border-border rounded-lg px-3 py-2 mb-3">{mensajeEquipo}</div>
+        )}
         <div className="flex flex-col">
           {equipo.map((p) => (
-            <div key={p.id} className="flex items-center justify-between py-2 border-b border-border last:border-none text-sm">
-              <span>{p.nombre_completo}</span>
-              <span className="text-xs text-text-soft">{p.activo ? "Activa" : "Inactiva"}</span>
+            <div
+              key={p.id}
+              className="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-border last:border-none text-sm"
+            >
+              <span className="flex flex-wrap items-center gap-2">
+                {p.nombre_completo}
+                {p.acompanamiento && (
+                  <span className="text-[11px] font-semibold border rounded-full px-2.5 py-0.5 bg-green-50 text-teal border-green-200">
+                    Acompañamiento docente
+                  </span>
+                )}
+              </span>
+              <span className="flex items-center gap-3">
+                <span className="text-xs text-text-soft">{p.activo ? "Activa" : "Inactiva"}</span>
+                <button
+                  onClick={() => alternarAcompanamiento(p)}
+                  className="text-xs text-navy font-semibold border border-border rounded-lg px-3 py-1.5"
+                >
+                  {p.acompanamiento ? "Quitar acompañamiento" : "Dar acompañamiento docente"}
+                </button>
+              </span>
             </div>
           ))}
           {equipo.length === 0 && <p className="text-sm text-text-soft">Todavía no hay cuentas cargadas.</p>}
