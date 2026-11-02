@@ -14,6 +14,7 @@ const links: { href: string; label: string; soloDirector?: boolean }[] = [
   { href: "/institucion/avisos", label: "Avisos" },
   { href: "/institucion/usuarios", label: "Usuarios" },
   { href: "/institucion/docentes", label: "Docentes", soloDirector: true },
+  { href: "/institucion/legajos", label: "Legajos", soloDirector: true },
 ];
 
 export default function InstitucionSidebar({
