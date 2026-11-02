@@ -1,6 +1,6 @@
 // En Next.js 16 el antiguo "middleware.ts" se llama "proxy.ts".
 // Se encarga de mantener la sesión de Supabase actualizada en cada navegación
-// y de proteger las rutas institucionales y de familia.
+// y de proteger las rutas institucionales, de familia y de docentes.
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
@@ -31,7 +31,8 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const rutaProtegida = path.startsWith("/institucion") || path.startsWith("/familia");
+  const rutaProtegida =
+    path.startsWith("/institucion") || path.startsWith("/familia") || path.startsWith("/docente");
 
   if (rutaProtegida && !user) {
     const url = request.nextUrl.clone();
