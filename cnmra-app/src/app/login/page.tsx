@@ -8,6 +8,17 @@ import InstallButton from "@/components/InstallButton";
 
 const ANIO_FUNDACION = 1980;
 
+// Los docentes entran con un usuario (nombre.apellido). Por detrás, la
+// plataforma lo convierte en un correo interno que el docente nunca ve.
+const DOMINIO_DOCENTES = "cnmra.edu.py";
+
+function construirCorreo(texto: string): string {
+  const limpio = texto.trim().toLowerCase();
+  if (limpio.includes("@")) return limpio;
+  const sinTildes = limpio.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "");
+  return `${sinTildes}@${DOMINIO_DOCENTES}`;
+}
+
 /** Años desde la fundación (3 de marzo de 1980), sumando uno recién a partir de esa fecha cada año. */
 function aniosDesdeFundacion(hoy: Date): number {
   const fundacionEsteAnio = new Date(hoy.getFullYear(), 2, 3); // 3 de marzo
@@ -30,12 +41,12 @@ export default function LoginPage() {
     setLoading(true);
 
     const { data, error: authError } = await supabase.auth.signInWithPassword({
-      email,
+      email: construirCorreo(email),
       password,
     });
 
     if (authError || !data.user) {
-      setError("Correo o contraseña incorrectos.");
+      setError("Correo o usuario, o contraseña incorrectos.");
       setLoading(false);
       return;
     }
@@ -54,6 +65,8 @@ export default function LoginPage() {
 
     if (perfil.rol === "director" || perfil.rol === "carga_datos") {
       router.push("/institucion");
+    } else if (perfil.rol === "docente") {
+      router.push("/docente");
     } else {
       router.push("/familia");
     }
@@ -111,13 +124,16 @@ export default function LoginPage() {
             </div>
 
             <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-              Correo electrónico
+              Correo o usuario
               <input
-                type="email"
+                type="text"
                 required
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="nombre@correo.com"
+                placeholder="correo@ejemplo.com o nombre.apellido"
                 className="h-11 rounded-lg border border-border px-3.5 text-sm bg-bg focus:outline-none focus:border-teal"
               />
             </label>
