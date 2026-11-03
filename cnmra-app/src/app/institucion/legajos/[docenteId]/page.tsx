@@ -84,8 +84,9 @@ export default function FichaLegajoPage() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-    const { data: yo } = await supabase.from("perfiles").select("rol").eq("id", user.id).single();
-    if (yo?.rol !== "director") {
+    const { data: yo } = await supabase.from("perfiles").select("rol, acompanamiento").eq("id", user.id).single();
+    const permitido = yo?.rol === "director" || (yo?.rol === "carga_datos" && yo?.acompanamiento === true);
+    if (!permitido) {
       setEsDirector(false);
       setCargando(false);
       return;
@@ -131,7 +132,7 @@ export default function FichaLegajoPage() {
 
   if (cargando) return <p className="text-sm text-text-soft">Cargando…</p>;
   if (!esDirector) {
-    return <div className="bg-card border border-border rounded-xl p-6 text-sm">Solo Dirección puede ver esta sección.</div>;
+    return <div className="bg-card border border-border rounded-xl p-6 text-sm">Solo Dirección o el acompañamiento docente pueden ver esta sección.</div>;
   }
 
   const volver = (
