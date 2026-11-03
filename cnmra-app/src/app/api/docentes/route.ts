@@ -1,10 +1,12 @@
-// API interna para que Dirección cree cuentas de docentes y les cambie la clave.
+// API interna para que Dirección cree cuentas de docentes, les cambie la clave,
+// edite su nombre, las dé de baja (o de alta) y las elimine.
 // Usa la clave de administrador de Supabase (SUPABASE_SERVICE_ROLE_KEY), que NUNCA
 // llega al navegador: este archivo solo se ejecuta en el servidor.
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 const DOMINIO = "cnmra.edu.py";
+const BUCKET = "planes-docentes";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Config = { url: string; key: string };
@@ -31,6 +33,35 @@ async function esDirector(): Promise<boolean> {
   if (!user) return false;
   const { data: perfil } = await supabase.from("perfiles").select("rol").eq("id", user.id).single();
   return perfil?.rol === "director";
+}
+
+async function archivosDe(cfg: Config, prefijo: string, nivel = 0): Promise<string[]> {
+  const r = await fetch(`${cfg.url}/storage/v1/object/list/${BUCKET}`, {
+    method: "POST",
+    headers: cabeceras(cfg.key),
+    body: JSON.stringify({ prefix: prefijo, limit: 1000, offset: 0 }),
+  });
+  if (!r.ok) return [];
+  const items = (await r.json()) as { name: string; id: string | null }[];
+  const rutas: string[] = [];
+  for (const it of items) {
+    const ruta = `${prefijo}/${it.name}`;
+    if (it.id === null) {
+      if (nivel < 4) rutas.push(...(await archivosDe(cfg, ruta, nivel + 1)));
+    } else {
+      rutas.push(ruta);
+    }
+  }
+  return rutas;
+}
+
+async function esDocente(cfg: Config, id: string): Promise<boolean> {
+  const r = await fetch(`${cfg.url}/rest/v1/perfiles?select=id&id=eq.${id}&rol=eq.docente`, {
+    headers: cabeceras(cfg.key),
+    cache: "no-store",
+  });
+  const encontrados = r.ok ? ((await r.json()) as unknown[]) : [];
+  return encontrados.length > 0;
 }
 
 function limpiarUsuario(u: string): string {
@@ -99,13 +130,13 @@ export async function GET() {
   }
 
   const rp = await fetch(
-    `${cfg.url}/rest/v1/perfiles?select=id,nombre_completo&rol=eq.docente&order=nombre_completo`,
+    `${cfg.url}/rest/v1/perfiles?select=id,nombre_completo,activo&rol=eq.docente&order=nombre_completo`,
     { headers: cabeceras(cfg.key), cache: "no-store" }
   );
   if (!rp.ok) {
     return NextResponse.json({ error: "No se pudo leer la lista de docentes." }, { status: 500 });
   }
-  const perfiles = (await rp.json()) as { id: string; nombre_completo: string }[];
+  const perfiles = (await rp.json()) as { id: string; nombre_completo: string; activo: boolean }[];
   const ids = new Set(perfiles.map((p) => p.id));
 
   const usuarios = new Map<string, string>();
@@ -127,6 +158,7 @@ export async function GET() {
     docentes: perfiles.map((p) => ({
       id: p.id,
       nombre_completo: p.nombre_completo,
+      activo: p.activo !== false,
       usuario: usuarios.get(p.id) ?? "",
     })),
   });
@@ -144,11 +176,78 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { accion?: string; docentes?: Entrada[]; id?: string; password?: string };
+  let body: { accion?: string; docentes?: Entrada[]; id?: string; password?: string; nombre_completo?: string; activo?: boolean };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Pedido inválido." }, { status: 400 });
+  }
+
+  if (body.accion === "editar" || body.accion === "baja" || body.accion === "eliminar") {
+    const id = body.id ?? "";
+    if (!UUID.test(id)) return NextResponse.json({ error: "Docente inválido." }, { status: 400 });
+    if (!(await esDocente(cfg, id))) {
+      return NextResponse.json({ error: "Esa cuenta no es de un docente." }, { status: 400 });
+    }
+
+    if (body.accion === "editar") {
+      const nombre = (body.nombre_completo ?? "").trim();
+      if (nombre.length < 3) return NextResponse.json({ error: "Escribí el nombre completo." }, { status: 400 });
+      const p = await fetch(`${cfg.url}/rest/v1/perfiles?id=eq.${id}`, {
+        method: "PATCH",
+        headers: cabeceras(cfg.key, { Prefer: "return=minimal" }),
+        body: JSON.stringify({ nombre_completo: nombre }),
+      });
+      if (!p.ok) return NextResponse.json({ error: "No se pudo guardar el nombre." }, { status: 500 });
+      await fetch(`${cfg.url}/auth/v1/admin/users/${id}`, {
+        method: "PUT",
+        headers: cabeceras(cfg.key),
+        body: JSON.stringify({ user_metadata: { nombre_completo: nombre } }),
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (body.accion === "baja") {
+      const activo = body.activo === true;
+      const p = await fetch(`${cfg.url}/rest/v1/perfiles?id=eq.${id}`, {
+        method: "PATCH",
+        headers: cabeceras(cfg.key, { Prefer: "return=minimal" }),
+        body: JSON.stringify({ activo }),
+      });
+      if (!p.ok) return NextResponse.json({ error: "No se pudo cambiar el estado." }, { status: 500 });
+      const b = await fetch(`${cfg.url}/auth/v1/admin/users/${id}`, {
+        method: "PUT",
+        headers: cabeceras(cfg.key),
+        body: JSON.stringify({ ban_duration: activo ? "none" : "876000h" }),
+      });
+      if (!b.ok) return NextResponse.json({ error: "No se pudo bloquear o habilitar el ingreso." }, { status: 500 });
+      return NextResponse.json({ ok: true });
+    }
+
+    // eliminar definitivamente: archivos, datos y cuenta
+    const rutas = await archivosDe(cfg, id);
+    for (let i = 0; i < rutas.length; i += 500) {
+      await fetch(`${cfg.url}/storage/v1/object/${BUCKET}`, {
+        method: "DELETE",
+        headers: cabeceras(cfg.key),
+        body: JSON.stringify({ prefixes: rutas.slice(i, i + 500) }),
+      });
+    }
+    await fetch(`${cfg.url}/rest/v1/documentos_docentes?docente_id=eq.${id}`, {
+      method: "DELETE",
+      headers: cabeceras(cfg.key),
+    });
+    await fetch(`${cfg.url}/rest/v1/legajos_docentes?docente_id=eq.${id}`, {
+      method: "DELETE",
+      headers: cabeceras(cfg.key),
+    });
+    await fetch(`${cfg.url}/rest/v1/perfiles?id=eq.${id}`, { method: "DELETE", headers: cabeceras(cfg.key) });
+    const d = await fetch(`${cfg.url}/auth/v1/admin/users/${id}`, { method: "DELETE", headers: cabeceras(cfg.key) });
+    if (!d.ok) {
+      const texto = await d.text();
+      return NextResponse.json({ error: "No se pudo eliminar la cuenta: " + texto.slice(0, 200) }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true });
   }
 
   if (body.accion === "clave") {
