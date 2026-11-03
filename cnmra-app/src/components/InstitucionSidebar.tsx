@@ -1,20 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAnioLectivo } from "@/lib/anio-lectivo";
 
-const links: { href: string; label: string; soloDirector?: boolean }[] = [
+const links: { href: string; label: string; soloDirector?: boolean; docentes?: boolean }[] = [
   { href: "/institucion", label: "Panel" },
   { href: "/institucion/inscripcion", label: "Inscripción" },
   { href: "/institucion/cursos", label: "Cursos" },
   { href: "/institucion/avisos", label: "Avisos" },
   { href: "/institucion/usuarios", label: "Usuarios" },
-  { href: "/institucion/docentes", label: "Docentes", soloDirector: true },
-  { href: "/institucion/legajos", label: "Legajos", soloDirector: true },
+  { href: "/institucion/docentes", label: "Docentes", docentes: true },
 ];
 
 export default function InstitucionSidebar({
@@ -28,7 +27,20 @@ export default function InstitucionSidebar({
   const router = useRouter();
   const supabase = createClient();
   const [abierto, setAbierto] = useState(false);
+  const [acompana, setAcompana] = useState(false);
   const { anio, setAnio, anios } = useAnioLectivo();
+
+  useEffect(() => {
+    if (rol === "director") return;
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from("perfiles").select("acompanamiento").eq("id", user.id).single();
+      setAcompana(data?.acompanamiento === true);
+    })();
+  }, [supabase, rol]);
 
   async function salir() {
     await supabase.auth.signOut();
@@ -63,89 +75,31 @@ export default function InstitucionSidebar({
 
   const navLinks = (onClick?: () => void) => (
     <nav className="flex flex-col gap-0.5">
-      {links.filter((l) => !l.soloDirector || rol === "director").map((l) => {
-        const active = l.href === "/institucion" ? pathname === l.href : pathname.startsWith(l.href);
-        return (
-          <Link
-            key={l.href}
-            href={l.href}
-            onClick={onClick}
-            className={`rounded-lg px-3.5 py-2.5 text-[13.5px] font-medium ${
-              active ? "bg-white/10 text-white" : "text-white/70 hover:text-white"
-            }`}
-          >
-            {l.label}
-          </Link>
-        );
-      })}
+      {links
+        .filter((l) => {
+          if (l.soloDirector && rol !== "director") return false;
+          if (l.docentes && rol !== "director" && !acompana) return false;
+          return true;
+        })
+        .map((l) => {
+          const active = l.href === "/institucion" ? pathname === l.href : pathname.startsWith(l.href);
+          return (
+            <Link
+              key={l.href}
+              href={l.href}
+              onClick={onClick}
+              className={`rounded-lg px-3.5 py-2.5 text-[13.5px] font-medium ${
+                active ? "bg-white/10 text-white" : "text-white/70 hover:text-white"
+              }`}
+            >
+              {l.label}
+            </Link>
+          );
+        })}
     </nav>
   );
 
   const perfilBox = (
     <div className="mt-auto flex items-center gap-2.5 border-t border-white/10 pt-3 px-1">
       <div className="w-8 h-8 rounded-full bg-teal flex items-center justify-center text-[12px] font-semibold flex-none">
-        {iniciales}
-      </div>
-      <div className="leading-tight flex-1 min-w-0">
-        <div className="text-[12.5px] font-medium truncate">{nombre}</div>
-        <div className="text-[11px] text-white/60">
-          {rol === "director" ? "Dirección · acceso total" : "Carga de datos"}
-        </div>
-      </div>
-      <button onClick={salir} title="Cerrar sesión" className="text-white/50 hover:text-white text-[11px] flex-none">
-        Salir
-      </button>
-    </div>
-  );
-
-  return (
-    <>
-      <div className="hidden md:flex print:hidden flex-none w-[220px] bg-navy-dark p-4 flex-col gap-6 text-white">
-        <div className="flex items-center gap-2.5 px-1">
-          <Image src="/logo.jpg" alt="CNMRA" width={32} height={32} className="rounded object-contain" />
-          <span className="font-display font-bold text-sm">CNMRA</span>
-        </div>
-        {selectorAnio}
-        {navLinks()}
-        {perfilBox}
-      </div>
-
-      <div className="md:hidden print:hidden flex-none bg-navy-dark text-white">
-        <div className="h-14 flex items-center justify-between px-4">
-          <div className="flex items-center gap-2.5">
-            <Image src="/logo.jpg" alt="CNMRA" width={28} height={28} className="rounded object-contain" />
-            <span className="font-display font-bold text-sm">CNMRA</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold bg-teal text-navy-dark px-2.5 py-1 rounded-full">{anio}</span>
-            <button
-              onClick={() => setAbierto((v) => !v)}
-              aria-label="Abrir menú"
-              className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-white/10"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                {abierto ? (
-                  <path d="M6 6l12 12M18 6L6 18" />
-                ) : (
-                  <>
-                    <path d="M3 6h18" />
-                    <path d="M3 12h18" />
-                    <path d="M3 18h18" />
-                  </>
-                )}
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        {abierto && (
-          <div className="px-4 pb-4 flex flex-col gap-5 border-t border-white/10 pt-3">
-            {selectorAnio}
-            {navLinks(() => setAbierto(false))}
-            {perfilBox}
-          </div>
-        )}
-      </div>
-    </>
-  );
-}
+        {iniciales
