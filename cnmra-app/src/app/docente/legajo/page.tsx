@@ -158,8 +158,28 @@ const CAMPOS_PERSONALES: Campo[] = [
 const CAMPOS_PROFESIONALES: Campo[] = [
   { k: "matricula", label: "Número de matrícula / registro docente" },
   { k: "fecha_ingreso", label: "Fecha de ingreso al colegio", tipo: "date" },
-  { k: "cargo", label: "Cargo" },
-  { k: "situacion", label: "Situación", tipo: "select", opciones: ["Permanente", "Contratado/a"] },
+  {
+    k: "cargo",
+    label: "Cargo",
+    tipo: "select",
+    opciones: [
+      "Director/a",
+      "Vicedirector/a",
+      "Coordinador/a pedagógico/a",
+      "Profesor/a guía",
+      "Catedrático/a",
+      "Psicólogo/a",
+      "Coordinador/a de proyectos",
+      "Auxiliar administrativo/a",
+      "Portero/a",
+    ],
+  },
+  {
+    k: "situacion",
+    label: "Situación",
+    tipo: "select",
+    opciones: ["Permanente", "Contratado/a", "Interino/a"],
+  },
   { k: "horas_catedra", label: "Horas cátedra semanales", tipo: "number" },
 ];
 
