@@ -53,7 +53,7 @@ export default function LegajosLista({ soloLectura }: { soloLectura: boolean }) 
     setEsDirector(true);
 
     const [{ data: docentes }, { data: legajos }, { data: planes }] = await Promise.all([
-      supabase.from("perfiles").select("id, nombre_completo").eq("rol", "docente").order("nombre_completo"),
+      supabase.from("perfiles").select("id, nombre_completo").eq("rol", "docente").eq("activo", true).order("nombre_completo"),
       supabase
         .from("legajos_docentes")
         .select("docente_id, enviado, enviado_en, habilitado_por_direccion, asignaciones"),
