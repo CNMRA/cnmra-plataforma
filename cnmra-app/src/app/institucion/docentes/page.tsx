@@ -30,7 +30,7 @@ const ETIQUETA_ESTADO = {
   enviado: { texto: "Enviado", clase: "bg-green-50 text-teal border-green-200" },
 };
 
-function Legajos() {
+function Legajos({ soloLectura }: { soloLectura: boolean }) {
   const supabase = createClient();
   const [cargando, setCargando] = useState(true);
   const [esDirector, setEsDirector] = useState(false);
@@ -44,8 +44,9 @@ function Legajos() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-    const { data: perfil } = await supabase.from("perfiles").select("rol").eq("id", user.id).single();
-    if (perfil?.rol !== "director") {
+    const { data: perfil } = await supabase.from("perfiles").select("rol, acompanamiento").eq("id", user.id).single();
+    const permitido = perfil?.rol === "director" || (perfil?.rol === "carga_datos" && perfil?.acompanamiento === true);
+    if (!permitido) {
       setEsDirector(false);
       setCargando(false);
       return;
@@ -212,7 +213,7 @@ function Legajos() {
                     {f.materias === 0 ? "—" : `${f.anuales} de ${f.materias}`}
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    {!f.habilitado && (
+                    {!f.habilitado && !soloLectura && (
                       <button onClick={() => habilitar(f)} className="text-xs text-navy font-medium mr-3">
                         Habilitar
                       </button>
@@ -726,93 +727,3 @@ function Planes({ tipos, nombre }: { tipos: string[]; nombre: string }) {
         {visibles.length === 0 && (
           <div className="bg-card border border-border rounded-xl px-4 py-6 text-center text-sm text-text-soft">
             No hay docentes para mostrar.
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-type Vista = "legajos" | "anual" | "proyectos" | "diario" | "cuentas";
-
-const SECCIONES: { v: Vista; titulo: string; texto: string; icono: string }[] = [
-  { v: "legajos", titulo: "Legajos del personal", texto: "Estado, ficha e impresión del legajo", icono: "📁" },
-  { v: "anual", titulo: "Planes anuales", texto: "Quién entregó y quién no", icono: "📘" },
-  { v: "proyectos", titulo: "Proyectos", texto: "Quién entregó y quién no", icono: "🧩" },
-  { v: "diario", titulo: "Planes diarios o semanales", texto: "Quién entregó y quién no", icono: "🗒️" },
-  { v: "cuentas", titulo: "Cuentas de acceso", texto: "Crear cuentas y cambiar claves", icono: "🔑" },
-];
-
-export default function DocentesPage() {
-  const supabase = createClient();
-  const [vista, setVista] = useState<Vista | null>(null);
-  const [rol, setRol] = useState<string | null | undefined>(undefined);
-
-  useEffect(() => {
-    const t = new URLSearchParams(window.location.search).get("tab");
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- leer la sección pedida en la dirección
-    if (t && SECCIONES.some((s) => s.v === t)) setVista(t as Vista);
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        setRol(null);
-        return;
-      }
-      const { data } = await supabase.from("perfiles").select("rol").eq("id", user.id).single();
-      setRol(data?.rol ?? null);
-    })();
-  }, [supabase]);
-
-  if (rol === undefined) return <p className="text-sm text-text-soft">Cargando…</p>;
-  if (rol !== "director") {
-    return (
-      <div className="bg-card border border-border rounded-xl p-6 text-sm">Solo Dirección puede ver esta sección.</div>
-    );
-  }
-
-  const actual = SECCIONES.find((s) => s.v === vista);
-
-  return (
-    <div className="flex flex-col gap-5">
-      {!actual ? (
-        <>
-          <h1 className="font-display text-2xl">Docentes</h1>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {SECCIONES.map((s) => (
-              <button
-                key={s.v}
-                onClick={() => setVista(s.v)}
-                className="text-left bg-card border border-border rounded-xl p-5 flex items-center gap-4 hover:border-teal"
-              >
-                <span className="text-3xl">{s.icono}</span>
-                <span>
-                  <span className="block font-semibold">{s.titulo}</span>
-                  <span className="block text-xs text-text-soft mt-0.5">{s.texto}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </>
-      ) : (
-        <>
-          <div>
-            <button onClick={() => setVista(null)} className="text-xs text-navy font-medium">
-              ← Docentes
-            </button>
-            <h1 className="font-display text-2xl mt-1">{actual.titulo}</h1>
-          </div>
-          {actual.v === "legajos" && <Legajos />}
-          {actual.v === "anual" && <Planes tipos={["plan_anual"]} nombre="Planes anuales" />}
-          {actual.v === "proyectos" && <Planes tipos={["proyecto"]} nombre="Proyectos" />}
-          {actual.v === "diario" && <Planes tipos={["plan_diario", "plan_semanal"]} nombre="Planes diarios o semanales" />}
-          {actual.v === "cuentas" && <Cuentas />}
-        </>
-      )}
-    </div>
-  );
-}
