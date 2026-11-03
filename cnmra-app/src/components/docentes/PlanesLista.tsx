@@ -2,25 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { BUCKET_DOCENTES, formatoFecha, type ArchivoDocumento } from "@/lib/docentes";
-
-type DocenteBasico = { id: string; nombre_completo: string };
+import { BUCKET_DOCENTES } from "@/lib/docentes";
+import PlanFila, { type DocenteBasico, type DocPlan, type FilaPlan, type ItemMateria } from "./PlanFila";
 
 function sinTildes(t: string): string {
   return t.normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 
 type CursoInfo = { id: string; grado: string; turno: string; enfasis: string | null };
-type DocPlan = {
-  id: string;
-  docente_id: string;
-  tipo: string;
-  titulo: string;
-  materia: string | null;
-  curso_id: string | null;
-  fecha: string;
-  archivos: ArchivoDocumento[] | null;
-};
 type LegajoMaterias = { docente_id: string; asignaciones: { curso_id: string; materia: string }[] | null };
 type DatosPlanes = {
   docentes: DocenteBasico[];
@@ -28,7 +17,6 @@ type DatosPlanes = {
   cursos: CursoInfo[];
   docs: DocPlan[];
 };
-type ItemMateria = { clave: string; curso: string; materia: string; docs: DocPlan[]; enLegajo: boolean };
 
 export default function PlanesLista({ tipos, nombre }: { tipos: string[]; nombre: string }) {
   const supabase = createClient();
@@ -71,7 +59,7 @@ export default function PlanesLista({ tipos, nombre }: { tipos: string[]; nombre
     };
   }, [supabase, clavesTipos]);
 
-  const filas = useMemo(() => {
+  const filas = useMemo<FilaPlan[]>(() => {
     if (!datos) return [];
     const etiquetaCurso = new Map<string, string>();
     datos.cursos.forEach((c) =>
@@ -106,12 +94,8 @@ export default function PlanesLista({ tipos, nombre }: { tipos: string[]; nombre
       const lista = Array.from(items.values());
       const requeridas = lista.filter((i) => i.enLegajo);
       const entregadas = requeridas.filter((i) => i.docs.length > 0).length;
-      const estado: "sin_materias" | "entrego" | "no" =
-        requeridas.length === 0
-          ? "sin_materias"
-          : entregadas === requeridas.length
-            ? "entrego"
-            : "no";
+      const estado: FilaPlan["estado"] =
+        requeridas.length === 0 ? "sin_materias" : entregadas === requeridas.length ? "entrego" : "no";
       return { doc, lista, requeridas: requeridas.length, entregadas, estado };
     });
   }, [datos]);
@@ -141,5 +125,52 @@ export default function PlanesLista({ tipos, nombre }: { tipos: string[]; nombre
   if (cargando) return <p className="text-sm text-text-soft">Cargando…</p>;
   if (error) return <p className="text-sm text-danger">{error}</p>;
 
-  const ETQ = {
-    entrego: { t:
+  const boton = (v: typeof filtro, t: string, n: number) => (
+    <button
+      key={v}
+      onClick={() => setFiltro(v)}
+      className={`rounded-full px-3.5 py-1.5 text-xs font-medium border ${
+        filtro === v ? "bg-navy text-white border-navy" : "bg-card border-border text-text-soft"
+      }`}
+    >
+      {t} ({n})
+    </button>
+  );
+
+  return (
+    <div className="flex flex-col gap-5">
+      <p className="text-sm text-text-soft">
+        {nombre}: {nEntrego} de {filas.length} docentes entregaron todas sus materias.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        {boton("todos", "Todos", filas.length)}
+        {boton("entrego", "Entregaron", nEntrego)}
+        {boton("no", "No entregaron", nNo)}
+        <input
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Buscar por nombre…"
+          className="h-9 rounded-lg border border-border px-3 text-sm bg-bg ml-auto w-full sm:w-56"
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {visibles.map((f) => (
+          <PlanFila
+            key={f.doc.id}
+            fila={f}
+            abierto={abierto === f.doc.id}
+            alternar={() => setAbierto(abierto === f.doc.id ? null : f.doc.id)}
+            abrirArchivo={abrirArchivo}
+            tipos={tipos}
+          />
+        ))}
+        {visibles.length === 0 && (
+          <div className="bg-card border border-border rounded-xl px-4 py-6 text-center text-sm text-text-soft">
+            No hay docentes para mostrar.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
