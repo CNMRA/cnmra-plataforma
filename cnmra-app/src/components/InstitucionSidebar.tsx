@@ -63,7 +63,7 @@ export default function InstitucionSidebar({ nombre, rol }: { nombre: string; ro
       </div>
       <nav className="flex flex-col gap-0.5">
         {links
-          .filter((l) => !l.docentes || esDirector || acompana)
+          .filter((l) => !l.docentes || (anio === 2027 && (esDirector || acompana)))
           .map((l) => {
             const activo = l.href === "/institucion" ? pathname === l.href : pathname.startsWith(l.href);
             return (
