@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useAnioLectivo } from "@/lib/anio-lectivo";
 import LegajosLista from "@/components/docentes/LegajosLista";
 import PlanesLista from "@/components/docentes/PlanesLista";
 import CuentasAcceso from "@/components/docentes/CuentasAcceso";
@@ -19,7 +20,8 @@ const SECCIONES: { v: Vista; titulo: string; texto: string; icono: string }[] = 
 export default function DocentesPage() {
   const supabase = createClient();
   const [vista, setVista] = useState<Vista | null>(null);
-  const [acceso, setAcceso] = useState<"director" | "acompanante" | null | undefined>(undefined);
+  const [acceso, setAcceso] = useState<"director" | "gestor" | "acompanante" | null | undefined>(undefined);
+  const { anio } = useAnioLectivo();
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("tab");
@@ -36,8 +38,10 @@ export default function DocentesPage() {
         setAcceso(null);
         return;
       }
-      const { data } = await supabase.from("perfiles").select("rol, acompanamiento").eq("id", user.id).single();
+      const { data } = await supabase.from("perfiles").select("rol, acompanamiento, gestiona_usuarios").eq("id", user.id).single();
       if (data?.rol === "director") setAcceso("director");
+      else if (data?.rol === "carga_datos" && data?.acompanamiento === true && data?.gestiona_usuarios === true)
+        setAcceso("gestor");
       else if (data?.rol === "carga_datos" && data?.acompanamiento === true) setAcceso("acompanante");
       else setAcceso(null);
     })();
@@ -52,8 +56,16 @@ export default function DocentesPage() {
     );
   }
 
-  const soloLectura = acceso !== "director";
-  const secciones = SECCIONES.filter((s) => !soloLectura || s.v !== "cuentas");
+  if (anio !== 2027) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-6 text-sm">
+        La sección Docentes está disponible en el año lectivo <b>2027</b>. Cambiá el año en el menú.
+      </div>
+    );
+  }
+
+  const soloLectura = acceso === "acompanante";
+  const secciones = SECCIONES.filter((s) => acceso === "director" || s.v !== "cuentas");
   const actual = secciones.find((s) => s.v === vista);
 
   return (
