@@ -1,25 +1,38 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import EstudiantesResumen from "@/components/EstudiantesResumen";
 
 export default async function PanelInstitucional() {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: perfil } = user
+    ? await supabase.from("perfiles").select("rol, acompanamiento").eq("id", user.id).single()
+    : { data: null };
 
-  const [{ count: estudiantesActivos }, { count: inscripcionesPendientes }, { data: alertas }] =
-    await Promise.all([
-      supabase.from("estudiantes").select("*", { count: "exact", head: true }).eq("estado", "activo"),
-      supabase.from("inscripciones").select("*", { count: "exact", head: true }).eq("estado", "pendiente"),
-      supabase
-        .from("alertas")
-        .select("id, mensaje, severidad, creado_en, estudiantes(nombre_completo)")
-        .order("creado_en", { ascending: false })
-        .limit(6),
-    ]);
+  const veDocentes =
+    perfil?.rol === "director" || (perfil?.rol === "carga_datos" && perfil?.acompanamiento === true);
 
-  const hoy = new Date().toISOString().slice(0, 10);
-  const { count: presentesHoy } = await supabase
-    .from("asistencias")
-    .select("*", { count: "exact", head: true })
-    .eq("fecha", hoy)
-    .eq("estado", "presente");
+  // Carga de datos sin acompañamiento: ve directamente el resumen de estudiantes
+  if (!veDocentes) {
+    return <EstudiantesResumen conVolver={false} />;
+  }
+
+  const botones = [
+    {
+      href: "/institucion/estudiantes",
+      icono: "🎒",
+      titulo: "Estudiantes",
+      texto: "Inscripción, cursos, avisos y alertas",
+    },
+    {
+      href: "/institucion/docentes",
+      icono: "👩‍🏫",
+      titulo: "Docentes",
+      texto: "Legajos, planes anuales, proyectos y planes diarios",
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -36,46 +49,19 @@ export default async function PanelInstitucional() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Stat label="Estudiantes activos" value={estudiantesActivos ?? 0} />
-        <Stat label="Inscripciones pendientes" value={inscripcionesPendientes ?? 0} color="text-warning" />
-        <Stat label="Presentes hoy" value={presentesHoy ?? 0} color="text-success" />
-        <Stat label="Alertas recientes" value={alertas?.length ?? 0} color="text-danger" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {botones.map((b) => (
+          <Link
+            key={b.href}
+            href={b.href}
+            className="bg-card border border-border rounded-2xl p-8 flex flex-col items-center text-center gap-3 hover:border-teal"
+          >
+            <span className="text-5xl">{b.icono}</span>
+            <span className="font-display text-xl font-bold">{b.titulo}</span>
+            <span className="text-xs text-text-soft">{b.texto}</span>
+          </Link>
+        ))}
       </div>
-
-      <div className="bg-card border border-border rounded-xl p-5">
-        <h3 className="font-display text-lg mb-3">Últimas alertas</h3>
-        {!alertas || alertas.length === 0 ? (
-          <p className="text-sm text-text-soft">Todavía no hay alertas cargadas.</p>
-        ) : (
-          <div className="flex flex-col">
-            {alertas.map((a) => (
-              <div key={a.id} className="flex items-center gap-3 py-2.5 border-b border-border last:border-none">
-                <span
-                  className={`w-2 h-2 rounded-full flex-none ${
-                    a.severidad === "alta" ? "bg-danger" : a.severidad === "media" ? "bg-warning" : "bg-gold"
-                  }`}
-                />
-                <div className="flex-1">
-                  <div className="text-[13.5px] font-medium">
-                    {(a.estudiantes as unknown as { nombre_completo: string } | null)?.nombre_completo ?? "—"}
-                  </div>
-                  <div className="text-xs text-text-soft">{a.mensaje}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Stat({ label, value, color }: { label: string; value: number; color?: string }) {
-  return (
-    <div className="bg-card border border-border rounded-xl p-4">
-      <div className="text-xs text-text-soft">{label}</div>
-      <div className={`font-display text-[28px] font-bold mt-1.5 ${color ?? ""}`}>{value}</div>
     </div>
   );
 }
