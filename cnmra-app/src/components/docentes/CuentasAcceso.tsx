@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-type Docente = { id: string; nombre_completo: string; usuario: string };
+type Docente = { id: string; nombre_completo: string; usuario: string; activo: boolean };
 type Fila = { ci: string; nombres: string; apellidos: string; nombre_completo: string; usuario: string; error?: string };
 type Resultado = { nombre_completo: string; usuario: string; password: string; ok: boolean; error?: string };
 
@@ -98,6 +98,43 @@ export default function CuentasAcceso() {
     });
     const j = await r.json();
     setMensaje(r.ok ? `Contraseña de ${d.nombre_completo} cambiada.` : (j.error ?? "No se pudo cambiar."));
+  }
+
+  async function accion(cuerpo: Record<string, unknown>, ok: string) {
+    setMensaje(null);
+    const r = await fetch("/api/docentes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cuerpo),
+    });
+    const j = await r.json();
+    setMensaje(r.ok ? ok : (j.error ?? "No se pudo hacer el cambio."));
+    if (r.ok) cargar();
+  }
+
+  function editar(d: Docente) {
+    const nuevo = window.prompt("Nombre completo del docente:", d.nombre_completo);
+    if (!nuevo || nuevo.trim() === d.nombre_completo) return;
+    accion({ accion: "editar", id: d.id, nombre_completo: nuevo.trim() }, `Nombre actualizado: ${nuevo.trim()}.`);
+  }
+
+  function darDeBaja(d: Docente) {
+    const msg = d.activo
+      ? `¿Dar de baja a ${d.nombre_completo}? No podrá entrar a la plataforma y dejará de aparecer en las listas. Sus datos y archivos se conservan y podés reactivarlo cuando quieras.`
+      : `¿Reactivar a ${d.nombre_completo}? Podrá volver a entrar con su misma clave.`;
+    if (!window.confirm(msg)) return;
+    accion(
+      { accion: "baja", id: d.id, activo: !d.activo },
+      d.activo ? `${d.nombre_completo} fue dado de baja.` : `${d.nombre_completo} fue reactivado.`
+    );
+  }
+
+  function eliminar(d: Docente) {
+    const t = window.prompt(
+      `ATENCIÓN: se borra para siempre la cuenta de ${d.nombre_completo}, su legajo y todos sus archivos. No se puede deshacer.\n\nSi solo dejó el colegio, conviene "Dar de baja".\n\nPara borrar definitivamente escribí ELIMINAR:`
+    );
+    if (t !== "ELIMINAR") return;
+    accion({ accion: "eliminar", id: d.id }, `${d.nombre_completo} fue eliminado definitivamente.`);
   }
 
   function copiarResultados() {
@@ -226,14 +263,32 @@ export default function CuentasAcceso() {
         ) : (
           <div className="flex flex-col divide-y divide-border">
             {docentes.map((d) => (
-              <div key={d.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                <div>
-                  <div className="font-medium">{d.nombre_completo}</div>
+              <div key={d.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5 text-sm">
+                <div className={d.activo ? "" : "opacity-60"}>
+                  <div className="font-medium flex flex-wrap items-center gap-2">
+                    {d.nombre_completo}
+                    {!d.activo && (
+                      <span className="text-[11px] font-semibold border rounded-full px-2.5 py-0.5 bg-bg text-text-soft border-border">
+                        De baja
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-text-soft font-mono">{d.usuario}</div>
                 </div>
-                <button onClick={() => cambiarClave(d)} className="text-xs text-navy font-medium">
-                  Cambiar clave
-                </button>
+                <div className="flex flex-wrap items-center gap-3 text-xs font-medium">
+                  <button onClick={() => editar(d)} className="text-navy">
+                    Editar
+                  </button>
+                  <button onClick={() => cambiarClave(d)} className="text-navy">
+                    Cambiar clave
+                  </button>
+                  <button onClick={() => darDeBaja(d)} className="text-navy">
+                    {d.activo ? "Dar de baja" : "Reactivar"}
+                  </button>
+                  <button onClick={() => eliminar(d)} className="text-danger">
+                    Eliminar
+                  </button>
+                </div>
               </div>
             ))}
           </div>
