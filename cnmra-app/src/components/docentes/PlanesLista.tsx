@@ -37,7 +37,7 @@ export default function PlanesLista({ tipos, nombre }: { tipos: string[]; nombre
   const [datos, setDatos] = useState<DatosPlanes | null>(null);
   const [abierto, setAbierto] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
-  const [filtro, setFiltro] = useState<"todos" | "entrego" | "parcial" | "no">("todos");
+  const [filtro, setFiltro] = useState<"todos" | "entrego" | "no">("todos");
 
   const clavesTipos = tipos.join(",");
 
@@ -106,14 +106,12 @@ export default function PlanesLista({ tipos, nombre }: { tipos: string[]; nombre
       const lista = Array.from(items.values());
       const requeridas = lista.filter((i) => i.enLegajo);
       const entregadas = requeridas.filter((i) => i.docs.length > 0).length;
-      const estado: "sin_materias" | "entrego" | "parcial" | "no" =
+      const estado: "sin_materias" | "entrego" | "no" =
         requeridas.length === 0
           ? "sin_materias"
           : entregadas === requeridas.length
             ? "entrego"
-            : entregadas === 0
-              ? "no"
-              : "parcial";
+            : "no";
       return { doc, lista, requeridas: requeridas.length, entregadas, estado };
     });
   }, [datos]);
@@ -132,14 +130,12 @@ export default function PlanesLista({ tipos, nombre }: { tipos: string[]; nombre
 
   const visibles = filas.filter((f) => {
     if (filtro === "entrego" && f.estado !== "entrego") return false;
-    if (filtro === "parcial" && f.estado !== "parcial") return false;
     if (filtro === "no" && f.estado !== "no" && f.estado !== "sin_materias") return false;
     const q = busqueda.trim().toLowerCase();
     return !q || sinTildes(f.doc.nombre_completo.toLowerCase()).includes(sinTildes(q));
   });
 
   const nEntrego = filas.filter((f) => f.estado === "entrego").length;
-  const nParcial = filas.filter((f) => f.estado === "parcial").length;
   const nNo = filas.filter((f) => f.estado === "no" || f.estado === "sin_materias").length;
 
   if (cargando) return <p className="text-sm text-text-soft">Cargando…</p>;
@@ -147,7 +143,6 @@ export default function PlanesLista({ tipos, nombre }: { tipos: string[]; nombre
 
   const ETQ = {
     entrego: { t: "Entregó", c: "bg-green-50 text-teal border-green-200" },
-    parcial: { t: "Parcial", c: "bg-yellow-50 text-yellow-700 border-yellow-200" },
     no: { t: "No entregó", c: "bg-red-50 text-danger border-red-200" },
     sin_materias: { t: "Sin materias cargadas", c: "bg-bg text-text-soft border-border" },
   };
@@ -172,7 +167,6 @@ export default function PlanesLista({ tipos, nombre }: { tipos: string[]; nombre
       <div className="flex flex-wrap items-center gap-2">
         {boton("todos", "Todos", filas.length)}
         {boton("entrego", "Entregaron", nEntrego)}
-        {boton("parcial", "Parcial", nParcial)}
         {boton("no", "No entregaron", nNo)}
         <input
           value={busqueda}
