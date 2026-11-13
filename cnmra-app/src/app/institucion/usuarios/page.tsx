@@ -4,7 +4,14 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import FamiliaClave from "@/components/usuarios/FamiliaClave";
 
-type Perfil = { id: string; nombre_completo: string; rol: string; activo: boolean; acompanamiento: boolean };
+type Perfil = {
+  id: string;
+  nombre_completo: string;
+  rol: string;
+  activo: boolean;
+  acompanamiento: boolean;
+  gestiona_usuarios: boolean;
+};
 type Familia = {
   id: string;
   tutor_nombre: string;
@@ -17,6 +24,7 @@ export default function UsuariosInstitucional() {
   const supabase = createClient();
   const [perfiles, setPerfiles] = useState<Perfil[]>([]);
   const [familias, setFamilias] = useState<Familia[]>([]);
+  const [yo, setYo] = useState<{ rol: string; gestiona: boolean }>({ rol: "", gestiona: false });
   const [busqueda, setBusqueda] = useState("");
   const [userId, setUserId] = useState("");
   const [nombre, setNombre] = useState("");
@@ -26,9 +34,21 @@ export default function UsuariosInstitucional() {
   const [mensajeEquipo, setMensajeEquipo] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data: mio } = await supabase
+        .from("perfiles")
+        .select("rol, gestiona_usuarios")
+        .eq("id", user.id)
+        .single();
+      setYo({ rol: mio?.rol ?? "", gestiona: mio?.gestiona_usuarios === true });
+    }
+
     const { data: perfilesData } = await supabase
       .from("perfiles")
-      .select("id, nombre_completo, rol, activo, acompanamiento")
+      .select("id, nombre_completo, rol, activo, acompanamiento, gestiona_usuarios")
       .in("rol", ["director", "carga_datos"])
       .order("rol");
     setPerfiles((perfilesData as Perfil[] | null) ?? []);
@@ -44,6 +64,9 @@ export default function UsuariosInstitucional() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos desde Supabase
     cargar();
   }, [cargar]);
+
+  const esDirector = yo.rol === "director";
+  const puedeAsignar = esDirector || (yo.rol === "carga_datos" && yo.gestiona);
 
   async function agregar(e: React.FormEvent) {
     e.preventDefault();
@@ -61,29 +84,19 @@ export default function UsuariosInstitucional() {
     setGuardando(false);
   }
 
-  async function alternarAcompanamiento(p: Perfil) {
-    const nuevo = !p.acompanamiento;
-    const pregunta = nuevo
-      ? `¿Dar acompañamiento docente a ${p.nombre_completo}? Podrá VER y imprimir los legajos y los planes de los docentes (no podrá editar nada).`
-      : `¿Quitar el acompañamiento docente a ${p.nombre_completo}?`;
+  async function cambiar(p: Perfil, campo: "acompanamiento" | "gestiona_usuarios", pregunta: string, ok: string) {
     if (!window.confirm(pregunta)) return;
     setMensajeEquipo(null);
     const { data, error } = await supabase
       .from("perfiles")
-      .update({ acompanamiento: nuevo })
+      .update({ [campo]: !p[campo] })
       .eq("id", p.id)
       .select("id");
     if (error || !data || data.length === 0) {
-      setMensajeEquipo(
-        "No se pudo cambiar: " + (error?.message ?? "solo Dirección puede hacerlo.")
-      );
+      setMensajeEquipo("No se pudo cambiar: " + (error?.message ?? "no tenés permiso para hacerlo."));
       return;
     }
-    setMensajeEquipo(
-      nuevo
-        ? `${p.nombre_completo} ahora tiene acompañamiento docente.`
-        : `Se quitó el acompañamiento a ${p.nombre_completo}.`
-    );
+    setMensajeEquipo(ok);
     cargar();
   }
 
@@ -99,6 +112,9 @@ export default function UsuariosInstitucional() {
         f.estudiantes.some((e) => e.nombre_completo.toLowerCase().includes(q))
     );
   }, [familias, busqueda]);
+
+  const etiqueta = "text-[11px] font-semibold border rounded-full px-2.5 py-0.5 bg-green-50 text-teal border-green-200";
+  const botonChico = "text-xs text-navy font-semibold border border-border rounded-lg px-3 py-1.5";
 
   return (
     <div className="flex flex-col gap-6">
@@ -126,6 +142,12 @@ export default function UsuariosInstitucional() {
         <p className="text-xs text-text-soft mb-3">
           Con <b>acompañamiento docente</b>, la persona puede ver e imprimir los legajos y los planes de los docentes.
           No puede editar nada, ni crear cuentas, ni cambiar claves.
+          {esDirector && (
+            <>
+              {" "}
+              Con <b>gestión de usuarios</b>, puede dar y quitar el acompañamiento a los demás.
+            </>
+          )}
         </p>
         {mensajeEquipo && (
           <div className="text-sm bg-bg border border-border rounded-lg px-3 py-2 mb-3">{mensajeEquipo}</div>
@@ -138,20 +160,49 @@ export default function UsuariosInstitucional() {
             >
               <span className="flex flex-wrap items-center gap-2">
                 {p.nombre_completo}
-                {p.acompanamiento && (
-                  <span className="text-[11px] font-semibold border rounded-full px-2.5 py-0.5 bg-green-50 text-teal border-green-200">
-                    Acompañamiento docente
-                  </span>
-                )}
+                {p.acompanamiento && <span className={etiqueta}>Acompañamiento docente</span>}
+                {p.gestiona_usuarios && <span className={etiqueta}>Gestiona usuarios</span>}
               </span>
-              <span className="flex items-center gap-3">
+              <span className="flex flex-wrap items-center gap-2">
                 <span className="text-xs text-text-soft">{p.activo ? "Activa" : "Inactiva"}</span>
-                <button
-                  onClick={() => alternarAcompanamiento(p)}
-                  className="text-xs text-navy font-semibold border border-border rounded-lg px-3 py-1.5"
-                >
-                  {p.acompanamiento ? "Quitar acompañamiento" : "Dar acompañamiento docente"}
-                </button>
+                {puedeAsignar && (
+                  <button
+                    onClick={() =>
+                      cambiar(
+                        p,
+                        "acompanamiento",
+                        p.acompanamiento
+                          ? `¿Quitar el acompañamiento docente a ${p.nombre_completo}?`
+                          : `¿Dar acompañamiento docente a ${p.nombre_completo}? Podrá VER e imprimir los legajos y los planes de los docentes (no podrá editar nada).`,
+                        p.acompanamiento
+                          ? `Se quitó el acompañamiento a ${p.nombre_completo}.`
+                          : `${p.nombre_completo} ahora tiene acompañamiento docente.`
+                      )
+                    }
+                    className={botonChico}
+                  >
+                    {p.acompanamiento ? "Quitar acompañamiento" : "Dar acompañamiento docente"}
+                  </button>
+                )}
+                {esDirector && (
+                  <button
+                    onClick={() =>
+                      cambiar(
+                        p,
+                        "gestiona_usuarios",
+                        p.gestiona_usuarios
+                          ? `¿Quitar la gestión de usuarios a ${p.nombre_completo}?`
+                          : `¿Dar la gestión de usuarios a ${p.nombre_completo}? Podrá dar y quitar el acompañamiento docente a los demás.`,
+                        p.gestiona_usuarios
+                          ? `Se quitó la gestión de usuarios a ${p.nombre_completo}.`
+                          : `${p.nombre_completo} ahora puede gestionar usuarios.`
+                      )
+                    }
+                    className={botonChico}
+                  >
+                    {p.gestiona_usuarios ? "Quitar gestión de usuarios" : "Dar gestión de usuarios"}
+                  </button>
+                )}
               </span>
             </div>
           ))}
@@ -176,7 +227,7 @@ export default function UsuariosInstitucional() {
             <div key={f.id} className="flex flex-col gap-1 py-3 border-b border-border last:border-none">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm font-medium">{f.tutor_nombre}</span>
-                                {esDirector && <FamiliaClave id={f.id} nombre={f.tutor_nombre} />}
+                {esDirector && <FamiliaClave id={f.id} nombre={f.tutor_nombre} />}
                 <span className="text-xs text-text-soft">
                   {f.tutor_telefono ?? "Sin teléfono"}
                   {f.tutor_email ? ` · ${f.tutor_email}` : ""}
@@ -197,35 +248,37 @@ export default function UsuariosInstitucional() {
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-5">
-        <h3 className="font-display text-lg mb-2">Agregar usuario institucional</h3>
-        <p className="text-xs text-text-soft mb-4 leading-relaxed">
-          Primero creá la cuenta en Supabase (Authentication → Add user, con su
-          correo y una contraseña provisoria) y copiá el <b>User UID</b> que te da.
-          Pegalo acá para asignarle nombre y rol dentro de la plataforma.
-        </p>
-        <form onSubmit={agregar} className="flex flex-col md:flex-row gap-3 md:items-end">
-          <label className="flex flex-col gap-1.5 text-[13px] font-medium flex-1">
-            User UID (de Supabase)
-            <input value={userId} onChange={(e) => setUserId(e.target.value)} required className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card" />
-          </label>
-          <label className="flex flex-col gap-1.5 text-[13px] font-medium flex-1">
-            Nombre completo
-            <input value={nombre} onChange={(e) => setNombre(e.target.value)} required className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card" />
-          </label>
-          <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-            Rol
-            <select value={rol} onChange={(e) => setRol(e.target.value)} className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card md:w-auto">
-              <option value="carga_datos">Carga de datos</option>
-              <option value="director">Director</option>
-            </select>
-          </label>
-          <button disabled={guardando} className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-5 w-full md:w-auto">
-            {guardando ? "Guardando…" : "Agregar"}
-          </button>
-        </form>
-        {mensaje && <p className="text-sm text-text-soft mt-3">{mensaje}</p>}
-      </div>
+      {esDirector && (
+        <div className="bg-card border border-border rounded-xl p-5">
+          <h3 className="font-display text-lg mb-2">Agregar usuario institucional</h3>
+          <p className="text-xs text-text-soft mb-4 leading-relaxed">
+            Primero creá la cuenta en Supabase (Authentication → Add user, con su
+            correo y una contraseña provisoria) y copiá el <b>User UID</b> que te da.
+            Pegalo acá para asignarle nombre y rol dentro de la plataforma.
+          </p>
+          <form onSubmit={agregar} className="flex flex-col md:flex-row gap-3 md:items-end">
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium flex-1">
+              User UID (de Supabase)
+              <input value={userId} onChange={(e) => setUserId(e.target.value)} required className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card" />
+            </label>
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium flex-1">
+              Nombre completo
+              <input value={nombre} onChange={(e) => setNombre(e.target.value)} required className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card" />
+            </label>
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+              Rol
+              <select value={rol} onChange={(e) => setRol(e.target.value)} className="h-10 w-full rounded-lg border border-border px-3 text-sm bg-card md:w-auto">
+                <option value="carga_datos">Carga de datos</option>
+                <option value="director">Director</option>
+              </select>
+            </label>
+            <button disabled={guardando} className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-5 w-full md:w-auto">
+              {guardando ? "Guardando…" : "Agregar"}
+            </button>
+          </form>
+          {mensaje && <p className="text-sm text-text-soft mt-3">{mensaje}</p>}
+        </div>
+      )}
     </div>
   );
 }
