@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
+import FamiliaClave from "@/components/usuarios/FamiliaClave";
 
 type Perfil = { id: string; nombre_completo: string; rol: string; activo: boolean; acompanamiento: boolean };
 type Familia = {
