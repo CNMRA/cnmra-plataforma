@@ -176,6 +176,7 @@ export default function UsuariosInstitucional() {
             <div key={f.id} className="flex flex-col gap-1 py-3 border-b border-border last:border-none">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm font-medium">{f.tutor_nombre}</span>
+                                {esDirector && <FamiliaClave id={f.id} nombre={f.tutor_nombre} />}
                 <span className="text-xs text-text-soft">
                   {f.tutor_telefono ?? "Sin teléfono"}
                   {f.tutor_email ? ` · ${f.tutor_email}` : ""}
