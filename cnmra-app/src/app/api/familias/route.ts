@@ -38,11 +38,35 @@ export async function POST(req: Request) {
   if (key.startsWith("eyJ")) cab.Authorization = `Bearer ${key}`;
 
   // Solo se puede cambiar la clave de cuentas que sean de familias.
-  const f = await fetch(`${url}/rest/v1/familias?select=id&id=eq.${id}`, { headers: cab, cache: "no-store" });
-  const filas = f.ok ? ((await f.json()) as unknown[]) : [];
+  const f = await fetch(`${url}/rest/v1/familias?select=id,tutor_email&id=eq.${id}`, { headers: cab, cache: "no-store" });
+  const filas = f.ok ? ((await f.json()) as { id: string; tutor_email: string | null }[]) : [];
   if (filas.length === 0) return NextResponse.json({ error: "No es una cuenta de familia." }, { status: 404 });
 
-  const r = await fetch(`${url}/auth/v1/admin/users/${id}`, {
+  // La cuenta de acceso puede tener otro código interno: se busca por id y, si no, por correo.
+  let cuentaId: string | null = null;
+  const directo = await fetch(`${url}/auth/v1/admin/users/${id}`, { headers: cab, cache: "no-store" });
+  if (directo.ok) cuentaId = id;
+
+  const correo = (filas[0].tutor_email ?? "").trim().toLowerCase();
+  if (!cuentaId && correo) {
+    for (let pagina = 1; pagina <= 20 && !cuentaId; pagina++) {
+      const lista = await fetch(`${url}/auth/v1/admin/users?page=${pagina}&per_page=200`, { headers: cab, cache: "no-store" });
+      if (!lista.ok) break;
+      const d = (await lista.json()) as { users?: { id: string; email?: string }[] };
+      const usuarios = d.users ?? [];
+      const hallado = usuarios.find((u) => (u.email ?? "").toLowerCase() === correo);
+      if (hallado) cuentaId = hallado.id;
+      if (usuarios.length < 200) break;
+    }
+  }
+  if (!cuentaId) {
+    return NextResponse.json(
+      { error: correo ? "No se encontró una cuenta de acceso con el correo " + correo + "." : "Esta familia no tiene correo cargado." },
+      { status: 404 },
+    );
+  }
+
+  const r = await fetch(`${url}/auth/v1/admin/users/${cuentaId}`, {
     method: "PUT",
     headers: cab,
     body: JSON.stringify({ password }),
