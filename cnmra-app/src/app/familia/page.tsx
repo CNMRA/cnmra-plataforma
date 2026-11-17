@@ -56,12 +56,20 @@ const BOTONES_GRANDES: Boton[] = [
   },
 ];
 
-const BOTON_MATRICULACION_2027: Boton = {
+// Desde esta fecha (hora de Paraguay) el botón de Matriculación 2027 aparece para todas las familias.
+// Antes de esa fecha solo lo ven las familias que tienen la marca matriculacion_2027_habilitada.
+const FECHA_APERTURA_MATRICULACION = "2026-11-24";
+
+function matriculacionAbierta(): boolean {
+  const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
+  return hoy >= FECHA_APERTURA_MATRICULACION;
+}
+
+const BOTON_MATRICULACION_2027 = {
   href: "/familia/matriculacion-2027",
   icono: "🖊️",
   titulo: "Matriculación 2027",
   descripcion: "Inscripción, ficha y Carta de Compromiso",
-  color: "bg-[#F3EAFF] border-[#DFC9FF]",
 };
 
 export default async function FamiliaInicio() {
@@ -158,7 +166,7 @@ export default async function FamiliaInicio() {
     };
   }
 
-  const destacado = familia?.matriculacion_2027_habilitada ? BOTON_MATRICULACION_2027 : null;
+  const destacado = familia?.matriculacion_2027_habilitada || matriculacionAbierta() ? BOTON_MATRICULACION_2027 : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -186,16 +194,29 @@ export default async function FamiliaInicio() {
         <h2 className="text-[13px] font-semibold text-text-soft uppercase tracking-wide mb-3">¿Qué necesitás hacer?</h2>
 
         {destacado && (
-          <Link
-            href={destacado.href}
-            className={`${destacado.color} border rounded-2xl p-5 flex items-center gap-4 hover:opacity-85 active:scale-[0.98] transition mb-3`}
-          >
-            <span className="text-4xl leading-none">{destacado.icono}</span>
-            <div className="flex flex-col text-left">
-              <span className="font-display font-bold text-base">{destacado.titulo}</span>
-              <span className="text-xs text-text-soft">{destacado.descripcion}</span>
-            </div>
-          </Link>
+          <>
+            <style>{`
+              @keyframes cnmra-latido {
+                0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(107, 63, 212, 0.55); }
+                50% { transform: scale(1.025); box-shadow: 0 0 0 14px rgba(107, 63, 212, 0); }
+              }
+              .cnmra-latido { animation: cnmra-latido 1.6s ease-in-out infinite; }
+              @media (prefers-reduced-motion: reduce) { .cnmra-latido { animation: none; } }
+            `}</style>
+            <Link
+              href={destacado.href}
+              className="cnmra-latido bg-[#6B3FD4] text-white border-2 border-[#4F2AA8] rounded-2xl p-5 flex items-center gap-4 mb-3 relative"
+            >
+              <span className="absolute -top-2.5 right-4 bg-[#FFD23F] text-[#3A2A00] text-[11px] font-extrabold rounded-full px-2.5 py-0.5 uppercase tracking-wide">
+                ¡Ya podés matricular!
+              </span>
+              <span className="text-4xl leading-none">{destacado.icono}</span>
+              <div className="flex flex-col text-left">
+                <span className="font-display font-bold text-lg">{destacado.titulo}</span>
+                <span className="text-xs text-white/85">{destacado.descripcion}</span>
+              </div>
+            </Link>
+          </>
         )}
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
