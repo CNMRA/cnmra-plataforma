@@ -20,6 +20,14 @@ function soloDigitos(texto: string) {
   return texto.replace(/\D/g, "");
 }
 
+// Desde esta fecha (hora de Paraguay) la matriculación 2027 está abierta para todas las familias.
+const FECHA_APERTURA_MATRICULACION = "2026-11-24";
+
+function matriculacionAbierta(): boolean {
+  const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
+  return hoy >= FECHA_APERTURA_MATRICULACION;
+}
+
 export default function Matriculacion2027Nuevo() {
   const supabase = createClient();
   const router = useRouter();
@@ -48,7 +56,7 @@ export default function Matriculacion2027Nuevo() {
         .select("matriculacion_2027_habilitada")
         .eq("tutor_perfil_id", user.id)
         .maybeSingle();
-      if (!familia || !familia.matriculacion_2027_habilitada) {
+      if (!matriculacionAbierta() && !familia?.matriculacion_2027_habilitada) {
         setSinAcceso(true);
       }
       setCargando(false);
