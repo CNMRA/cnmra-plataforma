@@ -3,6 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 
 const ANIO_LECTIVO = 2027;
 
+// Desde esta fecha (hora de Paraguay) la matriculación 2027 está abierta para todas las familias.
+const FECHA_APERTURA_MATRICULACION = "2026-11-24";
+
+function matriculacionAbierta(): boolean {
+  const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
+  return hoy >= FECHA_APERTURA_MATRICULACION;
+}
+
 export default async function Matriculacion2027Lista() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -13,12 +21,35 @@ export default async function Matriculacion2027Lista() {
     .eq("tutor_perfil_id", user!.id)
     .maybeSingle();
 
-  if (!familia || !familia.matriculacion_2027_habilitada) {
+  if (!matriculacionAbierta() && !familia?.matriculacion_2027_habilitada) {
     return (
       <div className="flex flex-col gap-4">
         <div><h1 className="font-display text-2xl">Matriculación 2027</h1></div>
         <div className="bg-card border border-border rounded-xl p-5 text-sm text-text-soft">
           Disponible próximamente.
+        </div>
+      </div>
+    );
+  }
+
+  if (!familia) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div>
+          <h1 className="font-display text-2xl">Matriculación 2027</h1>
+          <p className="text-sm text-text-soft mt-1">
+            Completá los datos y la Carta de Compromiso de cada hijo/a para el año lectivo 2027.
+          </p>
+        </div>
+        <Link
+          href="/familia/matriculacion-2027/nuevo"
+          className="bg-[#EAF0FF] border border-[#C9D8FF] rounded-xl p-4 flex items-center gap-3 hover:opacity-85 active:scale-[0.98] transition w-fit"
+        >
+          <span className="text-2xl leading-none">➕</span>
+          <span className="font-display font-bold text-sm">Inscribir un hijo/a nuevo</span>
+        </Link>
+        <div className="bg-card border border-border rounded-xl p-5 text-sm text-text-soft">
+          No tenés hijos/as cargados todavía.
         </div>
       </div>
     );
