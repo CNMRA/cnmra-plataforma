@@ -100,11 +100,24 @@ export default async function Matriculacion2027Lista() {
             estado === "Completado" ? "bg-[#E6F4EC] text-[#1E7A47]" :
             estado === "En progreso" ? "bg-[#FBF3DE] text-[#8A6D1B]" : "bg-bg text-text-soft";
           return (
-            <Link key={e.id} href={`/familia/matriculacion-2027/${e.id}`}
-              className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-3 hover:opacity-85">
-              <span className="text-sm font-semibold">{e.nombre_completo}</span>
-              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${color}`}>{estado}</span>
-            </Link>
+            <div key={e.id} className="bg-card border border-border rounded-xl overflow-hidden">
+              <Link
+                href={`/familia/matriculacion-2027/${e.id}`}
+                className="p-4 flex items-center justify-between gap-3 hover:opacity-85"
+              >
+                <span className="text-sm font-semibold">{e.nombre_completo}</span>
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${color}`}>{estado}</span>
+              </Link>
+              {estadoPorEstudiante.has(e.id) && (
+                <Link
+                  href={`/familia/matriculacion-2027/${e.id}/hambre-cero`}
+                  className="border-t border-border px-4 py-2.5 flex items-center gap-2 text-xs font-medium text-teal hover:opacity-85"
+                >
+                  <span>🍽️</span>
+                  <span>Autorización Programa Hambre Cero (imprimir y firmar)</span>
+                </Link>
+              )}
+            </div>
           );
         })}
       </div>
