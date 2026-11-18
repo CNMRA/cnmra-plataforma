@@ -5,6 +5,15 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 const ANIO_LECTIVO = 2027;
+const CUPO_MAXIMO = 30;
+
+// Desde esta fecha (hora de Paraguay) la matriculación 2027 está abierta para todas las familias.
+const FECHA_APERTURA_MATRICULACION = "2026-11-24";
+
+function matriculacionAbierta(): boolean {
+  const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
+  return hoy >= FECHA_APERTURA_MATRICULACION;
+}
 
 type Curso = { id: string; grado: string; turno: string; enfasis: string | null };
 type Estudiante = { id: string; nombre_completo: string; cedula: string | null; familia_id: string | null };
@@ -144,6 +153,7 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
   const [sinAcceso, setSinAcceso] = useState(false);
   const [estudiante, setEstudiante] = useState<Estudiante | null>(null);
   const [cursos, setCursos] = useState<Curso[]>([]);
+  const [cupos, setCupos] = useState<Record<string, number>>({});
   const [ficha, setFicha] = useState<FichaDB | null>(null);
   const [responsables, setResponsables] = useState<Responsable[]>([responsableVacio()]);
   const [mostrarEmergencia, setMostrarEmergencia] = useState(false);
@@ -165,6 +175,15 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
   const [emerVinculo, setEmerVinculo] = useState("");
   const [emerTelefono, setEmerTelefono] = useState("");
 
+  const cargarCupos = useCallback(async () => {
+    const { data } = await supabase.rpc("cupos_matriculacion_2027");
+    const mapa: Record<string, number> = {};
+    ((data ?? []) as { curso: string; total: number | string }[]).forEach((fila) => {
+      mapa[fila.curso] = Number(fila.total);
+    });
+    setCupos(mapa);
+  }, [supabase]);
+
   const cargar = useCallback(async () => {
     setCargando(true);
 
@@ -185,7 +204,7 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
       .eq("id", estudianteId)
       .maybeSingle();
 
-    if (!familia || !familia.matriculacion_2027_habilitada || !est || est.familia_id !== familia.id) {
+    if (!familia || (!matriculacionAbierta() && !familia.matriculacion_2027_habilitada) || !est || est.familia_id !== familia.id) {
       setSinAcceso(true);
       setCargando(false);
       return;
@@ -195,6 +214,7 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
 
     const { data: cursosData } = await supabase.from("cursos").select("id, grado, turno, enfasis").order("orden");
     setCursos(cursosData ?? []);
+    await cargarCupos();
 
     const { data: fichaData } = await supabase
       .from("fichas_matriculacion")
@@ -256,7 +276,7 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
     }
 
     setCargando(false);
-  }, [estudianteId, supabase]);
+  }, [estudianteId, supabase, cargarCupos]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos desde Supabase
@@ -336,7 +356,13 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
       .single();
 
     if (error || !fichaGuardada) {
-      setMensaje("No se pudo guardar: " + error?.message);
+      if (error?.message?.includes("CUPO_COMPLETO")) {
+        setMensaje("Ese curso ya completó sus " + CUPO_MAXIMO + " cupos. Elegí otro curso o turno.");
+        setCursoId("");
+        await cargarCupos();
+      } else {
+        setMensaje("No se pudo guardar: " + error?.message);
+      }
       setGuardando(false);
       return;
     }
@@ -476,11 +502,18 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
               Grado/Curso 2027
               <select required value={cursoId} onChange={(e) => setCursoId(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card">
                 <option value="">Seleccionar…</option>
-                {cursosDelTurno.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.grado} {c.enfasis ? `— ${c.enfasis}` : ""}
-                  </option>
-                ))}
+                {cursosDelTurno.map((c) => {
+                  const ocupados = cupos[c.id] ?? 0;
+                  const esMiCurso = c.id === ficha?.curso_id;
+                  const lleno = ocupados >= CUPO_MAXIMO && !esMiCurso;
+                  const quedan = CUPO_MAXIMO - ocupados;
+                  return (
+                    <option key={c.id} value={c.id} disabled={lleno}>
+                      {c.grado} {c.enfasis ? `— ${c.enfasis}` : ""}
+                      {lleno ? " (cupo completo)" : quedan <= 5 && !esMiCurso ? ` (quedan ${quedan})` : ""}
+                    </option>
+                  );
+                })}
               </select>
             </label>
           )}
