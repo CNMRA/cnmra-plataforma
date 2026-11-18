@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import BotonImprimir from "@/components/BotonImprimir";
 import ConfirmarCompromiso from "@/components/ConfirmarCompromiso";
 import EncabezadoDocumento from "@/components/EncabezadoDocumento";
+import HambreCeroDocumento, { type RespuestasHC } from "@/components/HambreCeroDocumento";
 
 const ANIO_LECTIVO = 2027;
 
@@ -392,6 +393,23 @@ export default async function Matriculacion2027Imprimir({ params }: { params: Pr
           <div className="linea">Firma del/de la estudiante</div>
         </div>
       </div>
+
+      {ficha.hambre_cero && (
+        <HambreCeroDocumento
+          d={{
+            respNombre: responsables[0].nombre ?? "",
+            respCedula: responsables[0].cedula ?? "",
+            respVinculo:
+              responsables[0].vinculo === "padre" ? "padre" : responsables[0].vinculo === "madre" ? "madre" : "encargado/a",
+            estNombre: estudiante!.nombre_completo ?? "",
+            estCedula: estudiante!.cedula ?? "",
+            institucion: "Colegio Nacional Mariano Roque Alonso",
+            gradoCurso: curso ? `${curso.grado}${curso.enfasis ? ` — ${curso.enfasis}` : ""}` : "",
+            turno: curso?.turno ?? "",
+          }}
+          r={ficha.hambre_cero as RespuestasHC}
+        />
+      )}
     </div>
   );
 }
