@@ -442,6 +442,12 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
     }
   }
 
+  function irAtras() {
+    setMensaje(null);
+    if (cartaIndex > 0) setCartaIndex((i) => i - 1);
+    else setPaso("datos");
+  }
+
   if (cargando) return <p className="text-sm text-text-soft">Cargando…</p>;
 
   if (sinAcceso) {
@@ -639,9 +645,23 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
 
           {mensaje && <div className="text-sm text-text-soft bg-bg rounded-lg px-3 py-2">{mensaje}</div>}
 
-          <button disabled={guardando} className="h-11 rounded-lg bg-navy text-white font-semibold text-sm w-fit px-6 disabled:opacity-60">
-            {guardando ? "Guardando…" : "Guardar y continuar a la Carta de Compromiso"}
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button disabled={guardando} className="h-11 rounded-lg bg-navy text-white font-semibold text-sm px-6 disabled:opacity-60">
+              {guardando ? "Guardando…" : "Guardar y continuar a la Carta de Compromiso"}
+            </button>
+            {ficha && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMensaje(null);
+                  setPaso(ficha.completado_en ? "listo" : "carta");
+                }}
+                className="h-11 rounded-lg border border-border font-semibold text-sm px-6"
+              >
+                Volver sin cambios
+              </button>
+            )}
+          </div>
         </form>
       )}
 
@@ -687,32 +707,68 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
 
           {mensaje && <div className="text-sm text-text-soft bg-bg rounded-lg px-3 py-2">{mensaje}</div>}
 
-          <button
-            onClick={aceptarSeccion}
-            disabled={guardando}
-            className="h-11 rounded-lg bg-navy text-white font-semibold text-sm w-fit px-6 disabled:opacity-60"
-          >
-            {guardando ? "Guardando…" : "Lo he leído, lo comprendo y lo acepto"}
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              onClick={aceptarSeccion}
+              disabled={guardando}
+              className="h-11 rounded-lg bg-navy text-white font-semibold text-sm px-6 disabled:opacity-60"
+            >
+              {guardando ? "Guardando…" : "Lo he leído, lo comprendo y lo acepto"}
+            </button>
+            <button type="button" onClick={irAtras} className="h-11 rounded-lg border border-border font-semibold text-sm px-6">
+              ← Atrás
+            </button>
+          </div>
         </div>
       )}
 
       {paso === "listo" && (
         <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
-          <p className="text-sm">
-            Completaste los datos y aceptaste los 7 puntos de la Carta de Compromiso para {estudiante?.nombre_completo}.
-          </p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Link
-              href={`/familia/matriculacion-2027/${estudianteId}/imprimir`}
-              className="h-11 rounded-lg bg-navy text-white font-semibold text-sm px-6 flex items-center justify-center"
-            >
-              Ver documento para imprimir
-            </Link>
-            <button type="button" onClick={() => setPaso("datos")} className="h-11 rounded-lg border border-border font-semibold text-sm px-6">
-              Editar mis datos
-            </button>
+          <div>
+            <h2 className="font-semibold text-base">¡Matriculación completa!</h2>
+            <p className="text-sm text-text-soft mt-1">
+              Completaste los datos y aceptaste la Carta de Compromiso de {estudiante?.nombre_completo}. Ahora imprimí los
+              documentos, firmalos y entregalos en el colegio.
+            </p>
           </div>
+
+          <div className="flex flex-col gap-3">
+            <div className="border border-border rounded-lg p-3 flex flex-col gap-2">
+              <div className="text-sm font-semibold">1. Ficha de matriculación y Carta de Compromiso</div>
+              <div className="text-xs text-text-soft">Imprimir y firmar (padre, madre o responsable, y estudiante).</div>
+              <Link
+                href={`/familia/matriculacion-2027/${estudianteId}/imprimir`}
+                className="h-11 rounded-lg bg-navy text-white font-semibold text-sm px-6 flex items-center justify-center"
+              >
+                Imprimir
+              </Link>
+            </div>
+
+            <div className="border border-border rounded-lg p-3 flex flex-col gap-2">
+              <div className="text-sm font-semibold">2. Autorización del Programa Hambre Cero</div>
+              <div className="text-xs text-text-soft">Respondé unas preguntas, imprimí y firmá.</div>
+              <Link
+                href={`/familia/matriculacion-2027/${estudianteId}/hambre-cero`}
+                className="h-11 rounded-lg bg-navy text-white font-semibold text-sm px-6 flex items-center justify-center"
+              >
+                Completar e imprimir
+              </Link>
+            </div>
+
+            <div className="border border-border rounded-lg p-3 flex flex-col gap-1">
+              <div className="text-sm font-semibold">3. Documentos que debe presentar</div>
+              <ul className="text-sm list-disc pl-5 flex flex-col gap-0.5">
+                <li>2 (dos) copias de la cédula de identidad del/de la estudiante</li>
+                <li>2 (dos) copias de la cédula de identidad del padre, madre o responsable</li>
+                <li>La Ficha de matriculación y la Carta de Compromiso, firmadas</li>
+                <li>La Autorización del Programa Hambre Cero, firmada</li>
+              </ul>
+            </div>
+          </div>
+
+          <button type="button" onClick={() => setPaso("datos")} className="h-11 rounded-lg border border-border font-semibold text-sm px-6">
+            Editar mis datos
+          </button>
         </div>
       )}
     </div>
