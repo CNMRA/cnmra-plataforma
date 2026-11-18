@@ -3,6 +3,8 @@
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import HambreCeroPreguntas from "@/components/HambreCeroPreguntas";
+import { RESPUESTAS_HC_VACIAS, validarHC, type RespuestasHC } from "@/components/HambreCeroDocumento";
 
 const ANIO_LECTIVO = 2027;
 const CUPO_MAXIMO = 30;
@@ -56,6 +58,7 @@ type FichaDB = {
   carta_g_aceptada_en: string | null;
   completado_en: string | null;
   confirmacion_final_en: string | null;
+  hambre_cero: RespuestasHC | null;
 };
 
 type Seccion = { letra: string; titulo: string; puntos: string[] };
@@ -157,10 +160,12 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
   const [ficha, setFicha] = useState<FichaDB | null>(null);
   const [responsables, setResponsables] = useState<Responsable[]>([responsableVacio()]);
   const [mostrarEmergencia, setMostrarEmergencia] = useState(false);
-  const [paso, setPaso] = useState<"datos" | "carta" | "listo">("datos");
+  const [paso, setPaso] = useState<"datos" | "carta" | "hambre" | "listo">("datos");
   const [cartaIndex, setCartaIndex] = useState(0);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const [respBloqueados, setRespBloqueados] = useState(false);
+  const [hc, setHc] = useState<RespuestasHC>(RESPUESTAS_HC_VACIAS);
 
   const [tramite, setTramite] = useState("");
   const [turnoElegido, setTurnoElegido] = useState("");
@@ -211,6 +216,22 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
     }
 
     setEstudiante(est);
+
+    // Si ya hay otro hijo/a de la familia con matriculación 2027, los datos del
+    // responsable se toman de esa ficha y no se pueden cambiar.
+    let fichaHermano: FichaDB | null = null;
+    const { data: hermanos } = await supabase.from("estudiantes").select("id").eq("familia_id", familia.id).neq("id", estudianteId);
+    const idsHermanos = (hermanos ?? []).map((h) => h.id);
+    if (idsHermanos.length > 0) {
+      const { data: fichasHermanos } = await supabase
+        .from("fichas_matriculacion")
+        .select("*")
+        .in("estudiante_id", idsHermanos)
+        .eq("anio_lectivo", ANIO_LECTIVO)
+        .limit(1);
+      fichaHermano = fichasHermanos && fichasHermanos.length > 0 ? (fichasHermanos[0] as FichaDB) : null;
+    }
+    setRespBloqueados(Boolean(fichaHermano));
 
     const { data: cursosData } = await supabase.from("cursos").select("id, grado, turno, enfasis").order("orden");
     setCursos(cursosData ?? []);
@@ -266,12 +287,55 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
           : [responsableVacio()]
       );
 
+      if (f.hambre_cero) setHc(f.hambre_cero);
+
       if (f.completado_en) {
-        setPaso("listo");
+        setPaso(f.hambre_cero ? "listo" : "hambre");
       } else {
         const primeraSinAceptar = SECCIONES_CARTA.findIndex((s) => !f[CAMPO_POR_LETRA[s.letra]]);
         setPaso("carta");
         setCartaIndex(primeraSinAceptar === -1 ? SECCIONES_CARTA.length - 1 : primeraSinAceptar);
+      }
+    }
+
+    if (!fichaData && fichaHermano) {
+      const { data: respHermano } = await supabase
+        .from("responsables_matriculacion")
+        .select("nombre, cedula, vinculo, telefono, direccion, ocupacion, correo")
+        .eq("ficha_id", fichaHermano.id)
+        .order("orden");
+
+      if (respHermano && respHermano.length > 0) {
+        setResponsables(
+          respHermano.map((r) => ({
+            nombre: r.nombre,
+            cedula: r.cedula,
+            vinculo: r.vinculo,
+            telefono: r.telefono,
+            direccion: r.direccion,
+            ocupacion: r.ocupacion ?? "",
+            correo: r.correo ?? "",
+          }))
+        );
+      } else {
+        setResponsables([
+          {
+            nombre: fichaHermano.responsable_nombre ?? "",
+            cedula: fichaHermano.responsable_cedula ?? "",
+            vinculo: fichaHermano.responsable_vinculo ?? "",
+            telefono: fichaHermano.responsable_telefono ?? "",
+            direccion: fichaHermano.responsable_direccion ?? "",
+            ocupacion: "",
+            correo: "",
+          },
+        ]);
+      }
+
+      if (fichaHermano.emergencia_nombre) {
+        setMostrarEmergencia(true);
+        setEmerNombre(fichaHermano.emergencia_nombre ?? "");
+        setEmerVinculo(fichaHermano.emergencia_vinculo ?? "");
+        setEmerTelefono(fichaHermano.emergencia_telefono ?? "");
       }
     }
 
@@ -436,10 +500,36 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
     setFicha(data as FichaDB);
 
     if (esUltima) {
-      setPaso("listo");
+      setPaso((data as FichaDB).hambre_cero ? "listo" : "hambre");
     } else {
       setCartaIndex((i) => i + 1);
     }
+  }
+
+  async function guardarHambreCero() {
+    if (!ficha) return;
+    const turno = cursos.find((c) => c.id === ficha.curso_id)?.turno ?? "";
+    const problema = validarHC(hc, turno);
+    if (problema) {
+      setMensaje(problema);
+      return;
+    }
+    setGuardando(true);
+    setMensaje(null);
+    const { data, error } = await supabase
+      .from("fichas_matriculacion")
+      .update({ hambre_cero: hc })
+      .eq("id", ficha.id)
+      .select("*")
+      .single();
+    setGuardando(false);
+    if (error || !data) {
+      setMensaje("No se pudo guardar: " + error?.message);
+      return;
+    }
+    setFicha(data as FichaDB);
+    setPaso("listo");
+    if (typeof window !== "undefined") window.scrollTo({ top: 0 });
   }
 
   function irAtras() {
@@ -553,11 +643,18 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
 
           <div className="border-t border-border pt-4">
             <h2 className="font-semibold text-sm mb-1">III. Datos de la madre, el padre y/o el responsable</h2>
-            <p className="text-xs text-text-soft mb-3">Completá al menos uno. Si el/la estudiante no vive con uno de los dos, simplemente no lo agregues.</p>
+            {respBloqueados ? (
+              <p className="text-xs text-text-soft mb-3">
+                Estos datos ya fueron cargados en la matriculación de tu otro hijo/a y no se pueden cambiar aquí. Si necesitás
+                corregir algo, comunicate con Secretaría.
+              </p>
+            ) : (
+              <p className="text-xs text-text-soft mb-3">Completá al menos uno. Si el/la estudiante no vive con uno de los dos, simplemente no lo agregues.</p>
+            )}
             <div className="flex flex-col gap-4">
               {responsables.map((r, i) => (
                 <div key={i} className="bg-bg rounded-lg p-4 flex flex-col gap-3">
-                  {i > 0 && (
+                  {i > 0 && !respBloqueados && (
                     <div className="flex justify-end">
                       <button type="button" onClick={() => quitarResponsable(i)} className="text-xs text-danger font-semibold">
                         Quitar
@@ -569,6 +666,7 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
                       Vínculo con el/la estudiante
                       <select
                         required
+                        disabled={respBloqueados}
                         value={r.vinculo}
                         onChange={(e) => actualizarResponsable(i, "vinculo", e.target.value)}
                         className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
@@ -581,34 +679,36 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
                     </label>
                     <label className="flex flex-col gap-1.5 text-[13px] font-medium">
                       Nombre y apellido
-                      <input required value={r.nombre} onChange={(e) => actualizarResponsable(i, "nombre", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
+                      <input required readOnly={respBloqueados} value={r.nombre} onChange={(e) => actualizarResponsable(i, "nombre", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
                     </label>
                     <label className="flex flex-col gap-1.5 text-[13px] font-medium">
                       C.I. N°
-                      <input required value={r.cedula} onChange={(e) => actualizarResponsable(i, "cedula", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
+                      <input required readOnly={respBloqueados} value={r.cedula} onChange={(e) => actualizarResponsable(i, "cedula", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
                     </label>
                     <label className="flex flex-col gap-1.5 text-[13px] font-medium">
                       Teléfono/WhatsApp
-                      <input required value={r.telefono} onChange={(e) => actualizarResponsable(i, "telefono", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
+                      <input required readOnly={respBloqueados} value={r.telefono} onChange={(e) => actualizarResponsable(i, "telefono", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
                     </label>
                     <label className="flex flex-col gap-1.5 text-[13px] font-medium sm:col-span-2">
                       Dirección
-                      <input required value={r.direccion} onChange={(e) => actualizarResponsable(i, "direccion", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
+                      <input required readOnly={respBloqueados} value={r.direccion} onChange={(e) => actualizarResponsable(i, "direccion", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
                     </label>
                     <label className="flex flex-col gap-1.5 text-[13px] font-medium">
                       Ocupación (opcional)
-                      <input value={r.ocupacion} onChange={(e) => actualizarResponsable(i, "ocupacion", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
+                      <input readOnly={respBloqueados} value={r.ocupacion} onChange={(e) => actualizarResponsable(i, "ocupacion", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
                     </label>
                     <label className="flex flex-col gap-1.5 text-[13px] font-medium">
                       Correo electrónico (opcional)
-                      <input type="email" value={r.correo} onChange={(e) => actualizarResponsable(i, "correo", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
+                      <input type="email" readOnly={respBloqueados} value={r.correo} onChange={(e) => actualizarResponsable(i, "correo", e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
                     </label>
                   </div>
                 </div>
               ))}
-              <button type="button" onClick={agregarResponsable} className="text-xs text-teal font-medium self-start">
-                + Agregar otro responsable
-              </button>
+              {!respBloqueados && (
+                <button type="button" onClick={agregarResponsable} className="text-xs text-teal font-medium self-start">
+                  + Agregar otro responsable
+                </button>
+              )}
             </div>
           </div>
 
@@ -654,7 +754,7 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
                 type="button"
                 onClick={() => {
                   setMensaje(null);
-                  setPaso(ficha.completado_en ? "listo" : "carta");
+                  setPaso(ficha.completado_en ? (ficha.hambre_cero ? "listo" : "hambre") : "carta");
                 }}
                 className="h-11 rounded-lg border border-border font-semibold text-sm px-6"
               >
@@ -722,53 +822,86 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
         </div>
       )}
 
+      {paso === "hambre" && ficha && (
+        <div className="flex flex-col gap-5">
+          <div className="bg-card border border-border rounded-xl p-5">
+            <span className="text-xs font-semibold text-text-soft uppercase tracking-wide">Último paso — Programa Hambre Cero</span>
+            <p className="text-sm text-text-soft mt-2">
+              Respondé estas preguntas sobre la alimentación escolar de <strong>{estudiante?.nombre_completo}</strong>. El
+              sistema completa la autorización y se imprime junto con los demás documentos.
+            </p>
+          </div>
+
+          <HambreCeroPreguntas turno={cursoElegido?.turno ?? ""} valor={hc} onChange={(v) => { setMensaje(null); setHc(v); }} />
+
+          {mensaje && <div className="text-sm text-text-soft bg-bg rounded-lg px-3 py-2">{mensaje}</div>}
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={guardarHambreCero}
+              disabled={guardando}
+              className="h-11 rounded-lg bg-navy text-white font-semibold text-sm px-6 disabled:opacity-60"
+            >
+              {guardando ? "Guardando…" : "Guardar y terminar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMensaje(null);
+                setCartaIndex(SECCIONES_CARTA.length - 1);
+                setPaso("carta");
+              }}
+              className="h-11 rounded-lg border border-border font-semibold text-sm px-6"
+            >
+              ← Atrás
+            </button>
+          </div>
+        </div>
+      )}
+
       {paso === "listo" && (
         <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
           <div>
             <h2 className="font-semibold text-base">¡Matriculación completa!</h2>
             <p className="text-sm text-text-soft mt-1">
-              Completaste los datos y aceptaste la Carta de Compromiso de {estudiante?.nombre_completo}. Ahora imprimí los
-              documentos, firmalos y entregalos en el colegio.
+              Completaste todos los pasos de {estudiante?.nombre_completo}. Ahora imprimí el documento, firmalo y entregalo en
+              el colegio.
             </p>
           </div>
 
-          <div className="flex flex-col gap-3">
-            <div className="border border-border rounded-lg p-3 flex flex-col gap-2">
-              <div className="text-sm font-semibold">1. Ficha de matriculación y Carta de Compromiso</div>
-              <div className="text-xs text-text-soft">Imprimir y firmar (padre, madre o responsable, y estudiante).</div>
-              <Link
-                href={`/familia/matriculacion-2027/${estudianteId}/imprimir`}
-                className="h-11 rounded-lg bg-navy text-white font-semibold text-sm px-6 flex items-center justify-center"
-              >
-                Imprimir
-              </Link>
+          <div className="border border-border rounded-lg p-3 flex flex-col gap-2">
+            <div className="text-sm font-semibold">Documento para imprimir y firmar</div>
+            <div className="text-xs text-text-soft">
+              Incluye la ficha de matriculación, la Carta de Compromiso y la Autorización del Programa Hambre Cero (todo en un solo
+              archivo).
             </div>
-
-            <div className="border border-border rounded-lg p-3 flex flex-col gap-2">
-              <div className="text-sm font-semibold">2. Autorización del Programa Hambre Cero</div>
-              <div className="text-xs text-text-soft">Respondé unas preguntas, imprimí y firmá.</div>
-              <Link
-                href={`/familia/matriculacion-2027/${estudianteId}/hambre-cero`}
-                className="h-11 rounded-lg bg-navy text-white font-semibold text-sm px-6 flex items-center justify-center"
-              >
-                Completar e imprimir
-              </Link>
-            </div>
-
-            <div className="border border-border rounded-lg p-3 flex flex-col gap-1">
-              <div className="text-sm font-semibold">3. Documentos que debe presentar</div>
-              <ul className="text-sm list-disc pl-5 flex flex-col gap-0.5">
-                <li>2 (dos) copias de la cédula de identidad del/de la estudiante</li>
-                <li>2 (dos) copias de la cédula de identidad del padre, madre o responsable</li>
-                <li>La Ficha de matriculación y la Carta de Compromiso, firmadas</li>
-                <li>La Autorización del Programa Hambre Cero, firmada</li>
-              </ul>
-            </div>
+            <Link
+              href={`/familia/matriculacion-2027/${estudianteId}/imprimir`}
+              className="h-11 rounded-lg bg-navy text-white font-semibold text-sm px-6 flex items-center justify-center"
+            >
+              Imprimir
+            </Link>
           </div>
 
-          <button type="button" onClick={() => setPaso("datos")} className="h-11 rounded-lg border border-border font-semibold text-sm px-6">
-            Editar mis datos
-          </button>
+          <div className="border border-border rounded-lg p-3 flex flex-col gap-1">
+            <div className="text-sm font-semibold">Documentos que debe presentar</div>
+            <ul className="text-sm list-disc pl-5 flex flex-col gap-0.5">
+              <li>2 (dos) copias de la cédula de identidad del/de la estudiante</li>
+              <li>2 (dos) copias de la cédula de identidad del padre, madre o responsable</li>
+              <li>La Ficha de matriculación y la Carta de Compromiso, firmadas</li>
+              <li>La Autorización del Programa Hambre Cero, firmada</li>
+            </ul>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button type="button" onClick={() => setPaso("datos")} className="h-11 rounded-lg border border-border font-semibold text-sm px-6">
+              Editar mis datos
+            </button>
+            <button type="button" onClick={() => setPaso("hambre")} className="h-11 rounded-lg border border-border font-semibold text-sm px-6">
+              Cambiar respuestas de Hambre Cero
+            </button>
+          </div>
         </div>
       )}
     </div>
