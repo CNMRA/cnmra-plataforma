@@ -9,12 +9,28 @@ import { RESPUESTAS_HC_VACIAS, validarHC, type RespuestasHC } from "@/components
 const ANIO_LECTIVO = 2027;
 const CUPO_MAXIMO = 30;
 
-// Desde esta fecha (hora de Paraguay) la matriculación 2027 está abierta para todas las familias.
-const FECHA_APERTURA_MATRICULACION = "2026-11-24";
+// Primera apertura (hora de Paraguay): 8°, 9°, 2° y 3° curso. Desde esta fecha la matriculación 2027 está abierta para las familias.
+const FECHA_APERTURA_MATRICULACION = "2026-11-23";
+// Segunda apertura: 7° grado y 1° curso.
+const FECHA_APERTURA_7_Y_PRIMEROS = "2026-11-24";
+
+function hoyParaguay(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
+}
 
 function matriculacionAbierta(): boolean {
-  const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
-  return hoy >= FECHA_APERTURA_MATRICULACION;
+  return hoyParaguay() >= FECHA_APERTURA_MATRICULACION;
+}
+
+function fechaAperturaCurso(grado: string): string {
+  const g = grado.trim().toLowerCase();
+  const esSeptimoOPrimero = /^(7|1|primer|s[eé]ptimo)/.test(g);
+  return esSeptimoOPrimero ? FECHA_APERTURA_7_Y_PRIMEROS : FECHA_APERTURA_MATRICULACION;
+}
+
+function etiquetaFecha(f: string): string {
+  const [, mes, dia] = f.split("-");
+  return `${dia}/${mes}`;
 }
 
 type Curso = { id: string; grado: string; turno: string; enfasis: string | null };
@@ -165,6 +181,7 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [respBloqueados, setRespBloqueados] = useState(false);
+  const [habilitadaPrueba, setHabilitadaPrueba] = useState(false);
   const [hc, setHc] = useState<RespuestasHC>(RESPUESTAS_HC_VACIAS);
 
   const [tramite, setTramite] = useState("");
@@ -216,6 +233,7 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
     }
 
     setEstudiante(est);
+    setHabilitadaPrueba(Boolean(familia.matriculacion_2027_habilitada));
 
     // Si ya hay otro hijo/a de la familia con matriculación 2027, los datos del
     // responsable se toman de esa ficha y no se pueden cambiar.
@@ -356,6 +374,10 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
     setResponsables((prev) => prev.map((r, idx) => (idx === i ? { ...r, [campo]: valor } : r)));
   }
 
+  function cursoDisponible(c: Curso): boolean {
+    return habilitadaPrueba || hoyParaguay() >= fechaAperturaCurso(c.grado);
+  }
+
   function agregarResponsable() {
     setResponsables((prev) => [...prev, responsableVacio()]);
   }
@@ -376,6 +398,11 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
     }
     if (!cursoId) {
       setMensaje("Seleccioná el grado/curso para 2027.");
+      return;
+    }
+    const cursoSeleccionado = cursos.find((c) => c.id === cursoId);
+    if (cursoSeleccionado && cursoSeleccionado.id !== ficha?.curso_id && !cursoDisponible(cursoSeleccionado)) {
+      setMensaje(`La matriculación para ese curso se habilita el ${etiquetaFecha(fechaAperturaCurso(cursoSeleccionado.grado))}.`);
       return;
     }
     const incompleto = responsables.some(
@@ -602,11 +629,18 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
                   const ocupados = cupos[c.id] ?? 0;
                   const esMiCurso = c.id === ficha?.curso_id;
                   const lleno = ocupados >= CUPO_MAXIMO && !esMiCurso;
+                  const cerrado = !cursoDisponible(c) && !esMiCurso;
                   const quedan = CUPO_MAXIMO - ocupados;
                   return (
-                    <option key={c.id} value={c.id} disabled={lleno}>
+                    <option key={c.id} value={c.id} disabled={lleno || cerrado}>
                       {c.grado} {c.enfasis ? `— ${c.enfasis}` : ""}
-                      {lleno ? " (cupo completo)" : quedan <= 5 && !esMiCurso ? ` (quedan ${quedan})` : ""}
+                      {cerrado
+                        ? ` (se habilita el ${etiquetaFecha(fechaAperturaCurso(c.grado))})`
+                        : lleno
+                          ? " (cupo completo)"
+                          : quedan <= 5 && !esMiCurso
+                            ? ` (quedan ${quedan})`
+                            : ""}
                     </option>
                   );
                 })}
