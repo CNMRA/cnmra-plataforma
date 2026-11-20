@@ -58,7 +58,7 @@ const BOTONES_GRANDES: Boton[] = [
 
 // Desde esta fecha (hora de Paraguay) el botón de Matriculación 2027 aparece para todas las familias.
 // Antes de esa fecha solo lo ven las familias que tienen la marca matriculacion_2027_habilitada.
-const FECHA_APERTURA_MATRICULACION = "2026-11-24";
+const FECHA_APERTURA_MATRICULACION = "2026-11-23";
 
 function matriculacionAbierta(): boolean {
   const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
