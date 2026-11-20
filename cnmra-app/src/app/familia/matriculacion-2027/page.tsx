@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 const ANIO_LECTIVO = 2027;
 
 // Desde esta fecha (hora de Paraguay) la matriculación 2027 está abierta para todas las familias.
-const FECHA_APERTURA_MATRICULACION = "2026-11-24";
+const FECHA_APERTURA_MATRICULACION = "2026-11-23";
 
 function matriculacionAbierta(): boolean {
   const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
@@ -108,15 +108,6 @@ export default async function Matriculacion2027Lista() {
                 <span className="text-sm font-semibold">{e.nombre_completo}</span>
                 <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${color}`}>{estado}</span>
               </Link>
-              {estadoPorEstudiante.has(e.id) && (
-                <Link
-                  href={`/familia/matriculacion-2027/${e.id}/hambre-cero`}
-                  className="border-t border-border px-4 py-2.5 flex items-center gap-2 text-xs font-medium text-teal hover:opacity-85"
-                >
-                  <span>🍽️</span>
-                  <span>Autorización Programa Hambre Cero (imprimir y firmar)</span>
-                </Link>
-              )}
             </div>
           );
         })}
