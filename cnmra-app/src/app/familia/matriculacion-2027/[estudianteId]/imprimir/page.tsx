@@ -8,7 +8,7 @@ import HambreCeroDocumento, { type RespuestasHC } from "@/components/HambreCeroD
 const ANIO_LECTIVO = 2027;
 
 // Desde esta fecha (hora de Paraguay) la matriculación 2027 está abierta para todas las familias.
-const FECHA_APERTURA_MATRICULACION = "2026-11-24";
+const FECHA_APERTURA_MATRICULACION = "2026-11-23";
 
 function matriculacionAbierta(): boolean {
   const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
