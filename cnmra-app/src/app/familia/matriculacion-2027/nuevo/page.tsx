@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { hoyParaguay, sincronizarReloj } from "@/lib/reloj-servidor";
 
 type Candidato = { estudianteId: string; nombre: string };
 
@@ -24,8 +25,7 @@ function soloDigitos(texto: string) {
 const FECHA_APERTURA_MATRICULACION = "2026-11-23";
 
 function matriculacionAbierta(): boolean {
-  const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
-  return hoy >= FECHA_APERTURA_MATRICULACION;
+  return hoyParaguay() >= FECHA_APERTURA_MATRICULACION;
 }
 
 export default function Matriculacion2027Nuevo() {
@@ -52,6 +52,7 @@ export default function Matriculacion2027Nuevo() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
+      await sincronizarReloj();
       const { data: familia } = await supabase
         .from("familias")
         .select("matriculacion_2027_habilitada")
