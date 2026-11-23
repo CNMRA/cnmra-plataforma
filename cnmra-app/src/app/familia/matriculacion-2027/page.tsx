@@ -69,6 +69,7 @@ export default async function Matriculacion2027Lista() {
     .in("estudiante_id", (estudiantes ?? []).map((e) => e.id));
 
   const estadoPorEstudiante = new Map((fichas ?? []).map((f) => [f.estudiante_id, f.completado_en]));
+  const hayHijos = (estudiantes ?? []).length > 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -79,38 +80,54 @@ export default async function Matriculacion2027Lista() {
         </p>
       </div>
 
-      <Link
-        href="/familia/matriculacion-2027/nuevo"
-        className="bg-[#EAF0FF] border border-[#C9D8FF] rounded-xl p-4 flex items-center gap-3 hover:opacity-85 active:scale-[0.98] transition w-fit"
-      >
-        <span className="text-2xl leading-none">➕</span>
-        <span className="font-display font-bold text-sm">Inscribir un hijo/a nuevo</span>
-      </Link>
+      {hayHijos && (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm font-semibold">
+            Tus hijos/as: tocá el nombre de cada uno para empezar o continuar su ficha.
+          </p>
+          {(estudiantes ?? []).map((e) => {
+            const completadoEn = estadoPorEstudiante.get(e.id);
+            const estado = completadoEn ? "Completado" : estadoPorEstudiante.has(e.id) ? "En progreso" : "Sin empezar";
+            const accion = completadoEn ? "Ver / imprimir →" : estadoPorEstudiante.has(e.id) ? "Continuar →" : "Empezar →";
+            const color =
+              estado === "Completado" ? "bg-[#E6F4EC] text-[#1E7A47]" :
+              estado === "En progreso" ? "bg-[#FBF3DE] text-[#8A6D1B]" : "bg-bg text-text-soft";
+            return (
+              <Link
+                key={e.id}
+                href={`/familia/matriculacion-2027/${e.id}`}
+                className="bg-card border border-border rounded-xl p-4 flex flex-col gap-2 hover:opacity-85 active:scale-[0.99] transition"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold">{e.nombre_completo}</span>
+                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${color}`}>{estado}</span>
+                </div>
+                <span className="text-xs font-semibold text-teal">{accion}</span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
 
-      {(!estudiantes || estudiantes.length === 0) && (
+      {!hayHijos && (
         <div className="bg-card border border-border rounded-xl p-5 text-sm text-text-soft">
           No tenés hijos/as cargados todavía.
         </div>
       )}
-      <div className="flex flex-col gap-3">
-        {(estudiantes ?? []).map((e) => {
-          const completadoEn = estadoPorEstudiante.get(e.id);
-          const estado = completadoEn ? "Completado" : estadoPorEstudiante.has(e.id) ? "En progreso" : "Sin empezar";
-          const color =
-            estado === "Completado" ? "bg-[#E6F4EC] text-[#1E7A47]" :
-            estado === "En progreso" ? "bg-[#FBF3DE] text-[#8A6D1B]" : "bg-bg text-text-soft";
-          return (
-            <div key={e.id} className="bg-card border border-border rounded-xl overflow-hidden">
-              <Link
-                href={`/familia/matriculacion-2027/${e.id}`}
-                className="p-4 flex items-center justify-between gap-3 hover:opacity-85"
-              >
-                <span className="text-sm font-semibold">{e.nombre_completo}</span>
-                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${color}`}>{estado}</span>
-              </Link>
-            </div>
-          );
-        })}
+
+      <div className="flex flex-col gap-2">
+        <Link
+          href="/familia/matriculacion-2027/nuevo"
+          className="bg-[#EAF0FF] border border-[#C9D8FF] rounded-xl p-4 flex items-center gap-3 hover:opacity-85 active:scale-[0.98] transition w-fit"
+        >
+          <span className="text-2xl leading-none">➕</span>
+          <span className="font-display font-bold text-sm">Inscribir un hijo/a nuevo</span>
+        </Link>
+        {hayHijos && (
+          <p className="text-xs text-text-soft">
+            Usalo solo si tu hijo/a todavía no aparece en la lista de arriba.
+          </p>
+        )}
       </div>
     </div>
   );
