@@ -3,6 +3,7 @@
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { hoyParaguay, sincronizarReloj } from "@/lib/reloj-servidor";
 import HambreCeroPreguntas from "@/components/HambreCeroPreguntas";
 import { RESPUESTAS_HC_VACIAS, validarHC, type RespuestasHC } from "@/components/HambreCeroDocumento";
 
@@ -13,10 +14,6 @@ const CUPO_MAXIMO = 30;
 const FECHA_APERTURA_MATRICULACION = "2026-11-23";
 // Segunda apertura: 7° grado y 1° curso.
 const FECHA_APERTURA_7_Y_PRIMEROS = "2026-11-24";
-
-function hoyParaguay(): string {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
-}
 
 function matriculacionAbierta(): boolean {
   return hoyParaguay() >= FECHA_APERTURA_MATRICULACION;
@@ -213,6 +210,8 @@ export default function Matriculacion2027Wizard({ params }: { params: Promise<{ 
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
+
+    await sincronizarReloj();
 
     const { data: familia } = await supabase
       .from("familias")
