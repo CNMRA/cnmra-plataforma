@@ -44,6 +44,7 @@ export default function Matriculacion2027Nuevo() {
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [candidato, setCandidato] = useState<Candidato | null>(null);
   const [vinculando, setVinculando] = useState(false);
+  const [yaCargado, setYaCargado] = useState<Candidato | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -94,6 +95,7 @@ export default function Matriculacion2027Nuevo() {
     setGuardando(true);
     setMensaje(null);
     setCandidato(null);
+    setYaCargado(null);
 
     const {
       data: { user },
@@ -135,7 +137,7 @@ export default function Matriculacion2027Nuevo() {
       .select("id, nombre_completo, cedula")
       .eq("familia_id", familia.id);
 
-    const yaExiste = (existentes ?? []).some((est) => {
+    const yaExiste = (existentes ?? []).find((est) => {
       if (usarCedulaComoClave) {
         return Boolean(est.cedula) && soloDigitos(est.cedula) === cedulaLimpia;
       }
@@ -143,7 +145,7 @@ export default function Matriculacion2027Nuevo() {
     });
 
     if (yaExiste) {
-      setMensaje("Ya cargaste a un hijo/a con estos datos. Si es un error, comunicate con la institución.");
+      setYaCargado({ estudianteId: yaExiste.id, nombre: yaExiste.nombre_completo });
       setGuardando(false);
       return;
     }
@@ -312,6 +314,21 @@ export default function Matriculacion2027Nuevo() {
                 No, es otro/a
               </button>
             </div>
+          </div>
+        )}
+
+        {yaCargado && (
+          <div className="bg-bg border border-border rounded-lg p-4 flex flex-col gap-3">
+            <p className="text-sm">
+              <strong>{yaCargado.nombre}</strong> ya está en tu lista. No hace falta cargarlo de nuevo: tocá el botón para
+              continuar con su ficha de matriculación 2027.
+            </p>
+            <Link
+              href={`/familia/matriculacion-2027/${yaCargado.estudianteId}`}
+              className="h-10 rounded-lg bg-navy text-white font-semibold text-sm px-4 w-fit inline-flex items-center"
+            >
+              Continuar con la ficha de {yaCargado.nombre}
+            </Link>
           </div>
         )}
 
