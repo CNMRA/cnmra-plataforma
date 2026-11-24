@@ -195,12 +195,20 @@ export default function Matriculacion2027Nuevo() {
       return;
     }
 
-    const { error } = await supabase.from("estudiantes").update({ familia_id: familia.id }).eq("id", candidato.estudianteId);
+    const { data: vinculado, error } = await supabase.rpc("vincular_estudiante_a_mi_familia", {
+      p_estudiante_id: candidato.estudianteId,
+    });
 
     setVinculando(false);
 
     if (error) {
       setMensaje("No se pudo vincular: " + error.message);
+      return;
+    }
+
+    if (!vinculado) {
+      setMensaje("No se pudo vincular a este estudiante porque ya pertenece a otra familia. Escribile al colegio para que lo revisen.");
+      setCandidato(null);
       return;
     }
 
