@@ -67,6 +67,7 @@ export default function UsuariosInstitucional() {
 
   const esDirector = yo.rol === "director";
   const puedeAsignar = esDirector || (yo.rol === "carga_datos" && yo.gestiona);
+  const puedeClaves = puedeAsignar;
 
   async function agregar(e: React.FormEvent) {
     e.preventDefault();
@@ -141,11 +142,12 @@ export default function UsuariosInstitucional() {
         </div>
         <p className="text-xs text-text-soft mb-3">
           Con <b>acompañamiento docente</b>, la persona puede ver e imprimir los legajos y los planes de los docentes.
-          No puede editar nada, ni crear cuentas, ni cambiar claves.
+          No puede editar nada.
           {esDirector && (
             <>
               {" "}
-              Con <b>gestión de usuarios</b>, puede dar y quitar el acompañamiento a los demás.
+              Con <b>gestión de usuarios</b>, puede dar y quitar el acompañamiento a los demás y cambiar la clave de las
+              cuentas de las familias.
             </>
           )}
         </p>
@@ -192,7 +194,7 @@ export default function UsuariosInstitucional() {
                         "gestiona_usuarios",
                         p.gestiona_usuarios
                           ? `¿Quitar la gestión de usuarios a ${p.nombre_completo}?`
-                          : `¿Dar la gestión de usuarios a ${p.nombre_completo}? Podrá dar y quitar el acompañamiento docente a los demás.`,
+                          : `¿Dar la gestión de usuarios a ${p.nombre_completo}? Podrá dar y quitar el acompañamiento docente a los demás y cambiar la clave de las cuentas de las familias.`,
                         p.gestiona_usuarios
                           ? `Se quitó la gestión de usuarios a ${p.nombre_completo}.`
                           : `${p.nombre_completo} ahora puede gestionar usuarios.`
@@ -227,7 +229,7 @@ export default function UsuariosInstitucional() {
             <div key={f.id} className="flex flex-col gap-1 py-3 border-b border-border last:border-none">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm font-medium">{f.tutor_nombre}</span>
-                {esDirector && <FamiliaClave id={f.id} nombre={f.tutor_nombre} />}
+                {puedeClaves && <FamiliaClave id={f.id} nombre={f.tutor_nombre} />}
                 <span className="text-xs text-text-soft">
                   {f.tutor_telefono ?? "Sin teléfono"}
                   {f.tutor_email ? ` · ${f.tutor_email}` : ""}
