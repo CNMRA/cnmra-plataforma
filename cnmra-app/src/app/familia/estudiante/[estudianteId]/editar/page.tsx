@@ -12,6 +12,10 @@ type Estudiante = {
   fecha_nacimiento: string | null;
 };
 
+function soloDigitos(texto: string) {
+  return texto.replace(/\D/g, "");
+}
+
 export default function EditarEstudianteFamilia({ params }: { params: Promise<{ estudianteId: string }> }) {
   const { estudianteId } = use(params);
   const supabase = createClient();
@@ -28,6 +32,7 @@ export default function EditarEstudianteFamilia({ params }: { params: Promise<{ 
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [exito, setExito] = useState(false);
+  const palabrasNombre = nombre.trim().split(/\s+/).filter(Boolean).length;
 
   const cargar = useCallback(async () => {
     const { data } = await supabase
@@ -69,7 +74,7 @@ export default function EditarEstudianteFamilia({ params }: { params: Promise<{ 
       .from("estudiantes")
       .update({
         nombre_completo: nombre.trim(),
-        cedula: sinCedula ? null : cedula.trim(),
+        cedula: sinCedula ? null : soloDigitos(cedula),
         fecha_nacimiento: fechaNacimiento || null,
       })
       .eq("id", estudianteId);
@@ -116,8 +121,16 @@ export default function EditarEstudianteFamilia({ params }: { params: Promise<{ 
 
       <form onSubmit={guardar} className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4 max-w-md">
         <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-          Nombre y apellido
+          Apellidos y nombres completos
           <input required value={nombre} onChange={(e) => setNombre(e.target.value)} className="h-11 rounded-lg border border-border px-3 text-sm bg-card" />
+          <span className="text-[11.5px] text-text-soft font-normal">
+            Escribí todos los apellidos y todos los nombres, tal como figuran en la cédula o el certificado de nacimiento.
+          </span>
+          {nombre.trim() && palabrasNombre <= 2 && (
+            <span className="text-[12px] text-warning font-normal">
+              Ese nombre tiene solo {palabrasNombre} palabra(s). Revisá que estén todos los apellidos y todos los nombres.
+            </span>
+          )}
         </label>
 
         <div className="flex flex-col gap-1.5">
@@ -125,10 +138,15 @@ export default function EditarEstudianteFamilia({ params }: { params: Promise<{ 
             Número de cédula
             <input
               required={!sinCedula}
-              disabled={sinCedula}
+              inputMode="numeric"
               value={cedula}
-              onChange={(e) => setCedula(e.target.value)}
-              className="h-11 rounded-lg border border-border px-3 text-sm bg-card disabled:opacity-50"
+              onChange={(e) => {
+                const limpio = soloDigitos(e.target.value);
+                setCedula(limpio);
+                if (limpio) setSinCedula(false);
+              }}
+              placeholder={sinCedula ? "Tocá acá y escribí la cédula" : ""}
+              className="h-11 rounded-lg border border-border px-3 text-sm bg-card"
             />
           </label>
           <label className="flex items-center gap-2 text-[13px] text-text-soft">
@@ -153,6 +171,15 @@ export default function EditarEstudianteFamilia({ params }: { params: Promise<{ 
           <div className={`text-sm rounded-lg px-3 py-2 ${exito ? "text-success bg-[#E7F3EB]" : "text-text-soft bg-bg"}`}>
             {mensaje}
           </div>
+        )}
+
+        {exito && (
+          <Link
+            href="/familia/matriculacion-2027"
+            className="h-11 rounded-lg bg-navy text-white font-semibold text-sm px-6 inline-flex items-center justify-center"
+          >
+            Seguir con la matriculación 2027
+          </Link>
         )}
 
         <div className="flex gap-3">
